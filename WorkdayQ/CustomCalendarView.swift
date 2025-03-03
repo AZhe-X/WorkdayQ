@@ -17,6 +17,9 @@ struct CustomCalendarView: View {
     @State private var currentMonth = Date()
     @State private var slideDirection: SlideDirection = .none
     
+    // New state for hierarchical date selection
+    @State private var calendarViewMode: CalendarViewMode = .days
+    
     // Fixed sizes to prevent layout shifts
     private let calendarGridHeight: CGFloat = 300
     private let dayHeight: CGFloat = 42 // Fixed height for each day
@@ -26,105 +29,112 @@ struct CustomCalendarView: View {
         case none, left, right
     }
     
+    enum CalendarViewMode {
+        case days, months, years
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            monthHeader
+            // Header changes based on view mode
+            calendarHeader
             
-            dayOfWeekHeader
-            
-            // Fixed height container
-            ZStack(alignment: .top) {
-                // Background to ensure fixed size
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(height: calendarGridHeight)
-                
-                // Calendar grid with transition
-                VStack(spacing: 0) {
-                    // Use a fixed number of rows (6) for consistency
-                    let weeks = daysInMonth().chunked(into: 7) // Group days into weeks
-                    
-                    ForEach(0..<6) { weekIndex in
-                        if weekIndex < weeks.count {
-                            HStack(spacing: 0) {
-                                ForEach(0..<7) { dayIndex in
-                                    if dayIndex < weeks[weekIndex].count {
-                                        let date = weeks[weekIndex][dayIndex]
-                                        if date.monthInt != currentMonth.monthInt {
-                                            // Days from other months - empty placeholder
-                                            Color.clear
-                                                .frame(height: dayHeight)
-                                                .frame(maxWidth: .infinity)
-                                        } else {
-                                            // Days from current month
-                                            dayView(for: date)
-                                                .frame(height: dayHeight)
-                                                .frame(maxWidth: .infinity)
-                                        }
-                                    } else {
-                                        Color.clear
-                                            .frame(height: dayHeight)
-                                            .frame(maxWidth: .infinity)
-                                    }
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                        } else {
-                            // Empty row to maintain fixed height
-                            HStack {
-                                ForEach(0..<7, id: \.self) { _ in
-                                    Color.clear
-                                        .frame(height: dayHeight)
-                                        .frame(maxWidth: .infinity)
-                                }
-                            }
-                        }
-                        
-                        if weekIndex < 5 { // Don't add spacing after the last row
-                            Spacer().frame(height: rowSpacing)
-                        }
-                    }
-                }
-                .frame(height: calendarGridHeight)
-                .id(currentMonth) // This forces view recreation when month changes
-                .transition(slideDirection == .left ? 
-                            .asymmetric(
-                                insertion: .move(edge: .trailing).combined(with: .opacity),
-                                removal: .move(edge: .leading).combined(with: .opacity)
-                            ) : 
-                            .asymmetric(
-                                insertion: .move(edge: .leading).combined(with: .opacity),
-                                removal: .move(edge: .trailing).combined(with: .opacity)
-                            ))
+            // Content changes based on view mode
+            switch calendarViewMode {
+            case .days:
+                dayOfWeekHeader
+                daysGridView
+            case .months:
+                monthsGridView
+            case .years:
+                yearsGridView
             }
-            .frame(height: calendarGridHeight)
-            .clipped() // Prevent any content from overflowing
         }
         .padding(.horizontal)
         .animation(.easeInOut(duration: 0.3), value: currentMonth)
+        .animation(.easeInOut(duration: 0.3), value: calendarViewMode)
     }
     
-    private var monthHeader: some View {
+    // Dynamic header based on current view mode
+    private var calendarHeader: some View {
         HStack {
-            Button(action: previousMonth) {
+            Button(action: navigatePrevious) {
                 Image(systemName: "chevron.left")
                     .foregroundColor(.primary)
             }
             
             Spacer()
             
-            Text(currentMonth, format: .dateTime.month().year())
-                .font(.title2)
-                .fontWeight(.semibold)
+            // Title changes based on view mode and is tappable
+            Button(action: advanceToNextViewMode) {
+                Text(headerTitle)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+            }
             
             Spacer()
             
-            Button(action: nextMonth) {
+            Button(action: navigateNext) {
                 Image(systemName: "chevron.right")
                     .foregroundColor(.primary)
             }
         }
         .padding(.vertical)
+    }
+    
+    // Title text changes based on current view mode
+    private var headerTitle: String {
+        let calendar = Calendar.current
+        switch calendarViewMode {
+        case .days:
+            // Show month and year
+            return currentMonth.formatted(.dateTime.month().year())
+        case .months:
+            // Show just the year
+            return String(calendar.component(.year, from: currentMonth))
+        case .years:
+            // Show year range
+            let year = calendar.component(.year, from: currentMonth)
+            let decadeStart = year - (year % 10)
+            return "\(decadeStart) - \(decadeStart + 9)"
+        }
+    }
+    
+    // Action for the title button
+    private func advanceToNextViewMode() {
+        withAnimation {
+            switch calendarViewMode {
+            case .days:
+                calendarViewMode = .months
+            case .months:
+                calendarViewMode = .years
+            case .years:
+                // Already at highest level, do nothing
+                break
+            }
+        }
+    }
+    
+    // Navigation buttons do different things based on view mode
+    private func navigatePrevious() {
+        switch calendarViewMode {
+        case .days:
+            previousMonth()
+        case .months:
+            previousYear()
+        case .years:
+            previousDecade()
+        }
+    }
+    
+    private func navigateNext() {
+        switch calendarViewMode {
+        case .days:
+            nextMonth()
+        case .months:
+            nextYear()
+        case .years:
+            nextDecade()
+        }
     }
     
     private var dayOfWeekHeader: some View {
@@ -140,6 +150,178 @@ struct CustomCalendarView: View {
         .padding(.bottom, 8) // Add consistent spacing after headers
     }
     
+    // Original days view now extracted to its own computed property
+    private var daysGridView: some View {
+        // Fixed height container
+        ZStack(alignment: .top) {
+            // Background to ensure fixed size
+            Rectangle()
+                .fill(Color.clear)
+                .frame(height: calendarGridHeight)
+            
+            // Calendar grid with transition
+            VStack(spacing: 0) {
+                // Use a fixed number of rows (6) for consistency
+                let weeks = daysInMonth().chunked(into: 7) // Group days into weeks
+                
+                ForEach(0..<6) { weekIndex in
+                    if weekIndex < weeks.count {
+                        HStack(spacing: 0) {
+                            ForEach(0..<7) { dayIndex in
+                                if dayIndex < weeks[weekIndex].count {
+                                    let date = weeks[weekIndex][dayIndex]
+                                    if date.monthInt != currentMonth.monthInt {
+                                        // Days from other months - empty placeholder
+                                        Color.clear
+                                            .frame(height: dayHeight)
+                                            .frame(maxWidth: .infinity)
+                                    } else {
+                                        // Days from current month
+                                        dayView(for: date)
+                                            .frame(height: dayHeight)
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                } else {
+                                    Color.clear
+                                        .frame(height: dayHeight)
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else {
+                        // Empty row to maintain fixed height
+                        HStack {
+                            ForEach(0..<7, id: \.self) { _ in
+                                Color.clear
+                                    .frame(height: dayHeight)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                    }
+                    
+                    if weekIndex < 5 { // Don't add spacing after the last row
+                        Spacer().frame(height: rowSpacing)
+                    }
+                }
+            }
+            .frame(height: calendarGridHeight)
+            .id(currentMonth) // This forces view recreation when month changes
+            .transition(slideDirection == .left ? 
+                        .asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        ) : 
+                        .asymmetric(
+                            insertion: .move(edge: .leading).combined(with: .opacity),
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
+        }
+        .frame(height: calendarGridHeight)
+        .clipped() // Prevent any content from overflowing
+    }
+    
+    // New view for month selection grid
+    private var monthsGridView: some View {
+        let monthNames = Calendar.current.monthSymbols
+        let columns = Array(repeating: GridItem(.flexible()), count: 3)
+        
+        return LazyVGrid(columns: columns, spacing: 20) {
+            ForEach(0..<12) { monthIndex in
+                let month = monthIndex + 1
+                
+                Button(action: {
+                    selectMonth(month)
+                }) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(isCurrentMonth(month) ? Color.blue.opacity(0.2) : Color.clear)
+                            .frame(height: 60)
+                        
+                        Text(monthNames[monthIndex])
+                            .fontWeight(isCurrentMonth(month) ? .bold : .regular)
+                    }
+                }
+            }
+        }
+        .frame(height: calendarGridHeight)
+        .transition(.opacity)
+    }
+    
+    // New view for year selection grid
+    private var yearsGridView: some View {
+        let calendar = Calendar.current
+        let currentYear = calendar.component(.year, from: currentMonth)
+        let decadeStart = currentYear - (currentYear % 10)
+        let columns = Array(repeating: GridItem(.flexible()), count: 3)
+        
+        return LazyVGrid(columns: columns, spacing: 20) {
+            ForEach(0..<12) { offset in
+                let year = decadeStart - 1 + offset
+                
+                Button(action: {
+                    selectYear(year)
+                }) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(year == currentYear ? Color.blue.opacity(0.2) : Color.clear)
+                            .frame(height: 60)
+                        
+                        Text("\(year)")
+                            .fontWeight(year == currentYear ? .bold : .regular)
+                    }
+                }
+            }
+        }
+        .frame(height: calendarGridHeight)
+        .transition(.opacity)
+    }
+    
+    // Helper to check if month is the current displayed month
+    private func isCurrentMonth(_ month: Int) -> Bool {
+        let calendar = Calendar.current
+        return calendar.component(.month, from: currentMonth) == month
+    }
+    
+    // Action when a month is selected
+    private func selectMonth(_ month: Int) {
+        let calendar = Calendar.current
+        let year = calendar.component(.year, from: currentMonth)
+        var dateComponents = DateComponents()
+        dateComponents.year = year
+        dateComponents.month = month
+        dateComponents.day = 1
+        
+        if let newDate = calendar.date(from: dateComponents) {
+            currentMonth = newDate
+        }
+        
+        // Go back to days view
+        withAnimation {
+            calendarViewMode = .days
+        }
+    }
+    
+    // Action when a year is selected
+    private func selectYear(_ year: Int) {
+        let calendar = Calendar.current
+        let month = calendar.component(.month, from: currentMonth)
+        var dateComponents = DateComponents()
+        dateComponents.year = year
+        dateComponents.month = month
+        dateComponents.day = 1
+        
+        if let newDate = calendar.date(from: dateComponents) {
+            currentMonth = newDate
+        }
+        
+        // Go back to months view
+        withAnimation {
+            calendarViewMode = .months
+        }
+    }
+    
+    // Original day view
     @ViewBuilder
     private func dayView(for date: Date) -> some View {
         let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
@@ -213,6 +395,7 @@ struct CustomCalendarView: View {
         return false
     }
     
+    // Navigation functions
     private func previousMonth() {
         slideDirection = .right // Slide to the right when going to previous month
         withAnimation {
@@ -230,6 +413,46 @@ struct CustomCalendarView: View {
             currentMonth = Calendar.current.date(
                 byAdding: .month,
                 value: 1,
+                to: currentMonth
+            ) ?? currentMonth
+        }
+    }
+    
+    private func previousYear() {
+        withAnimation {
+            currentMonth = Calendar.current.date(
+                byAdding: .year,
+                value: -1,
+                to: currentMonth
+            ) ?? currentMonth
+        }
+    }
+    
+    private func nextYear() {
+        withAnimation {
+            currentMonth = Calendar.current.date(
+                byAdding: .year,
+                value: 1,
+                to: currentMonth
+            ) ?? currentMonth
+        }
+    }
+    
+    private func previousDecade() {
+        withAnimation {
+            currentMonth = Calendar.current.date(
+                byAdding: .year,
+                value: -10,
+                to: currentMonth
+            ) ?? currentMonth
+        }
+    }
+    
+    private func nextDecade() {
+        withAnimation {
+            currentMonth = Calendar.current.date(
+                byAdding: .year,
+                value: 10,
                 to: currentMonth
             ) ?? currentMonth
         }
