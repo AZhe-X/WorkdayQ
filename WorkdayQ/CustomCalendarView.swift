@@ -5,6 +5,15 @@
 
 import SwiftUI
 
+// Move enums outside of the struct to make them accessible
+enum SlideDirection {
+    case none, left, right
+}
+
+enum CalendarViewMode {
+    case days, months, years
+}
+
 struct CustomCalendarView: View {
     @Binding var selectedDate: Date
     let workDays: [WorkDay]
@@ -19,19 +28,13 @@ struct CustomCalendarView: View {
     
     // New state for hierarchical date selection
     @State private var calendarViewMode: CalendarViewMode = .days
+    // Track which direction we're moving in the view hierarchy
+    @State private var isMovingUpInTimeScale: Bool = true
     
     // Fixed sizes to prevent layout shifts
     private let calendarGridHeight: CGFloat = 300
     private let dayHeight: CGFloat = 42 // Fixed height for each day
     private let rowSpacing: CGFloat = 8 // Fixed spacing between rows
-    
-    enum SlideDirection {
-        case none, left, right
-    }
-    
-    enum CalendarViewMode {
-        case days, months, years
-    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -69,6 +72,7 @@ struct CustomCalendarView: View {
                 Text(headerTitle)
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .foregroundColor(.primary)
             }
             
             Spacer()
@@ -101,7 +105,11 @@ struct CustomCalendarView: View {
     
     // Action for the title button
     private func advanceToNextViewMode() {
-        withAnimation {
+        withAnimation(.easeInOut(duration: 0.4)) {
+            // Reset slide direction to enable vertical transitions
+            slideDirection = .none
+            // We're moving up in time scale (day->month->year)
+            isMovingUpInTimeScale = true
             switch calendarViewMode {
             case .days:
                 calendarViewMode = .months
@@ -207,15 +215,8 @@ struct CustomCalendarView: View {
             }
             .frame(height: calendarGridHeight)
             .id(currentMonth) // This forces view recreation when month changes
-            .transition(slideDirection == .left ? 
-                        .asymmetric(
-                            insertion: .move(edge: .trailing).combined(with: .opacity),
-                            removal: .move(edge: .leading).combined(with: .opacity)
-                        ) : 
-                        .asymmetric(
-                            insertion: .move(edge: .leading).combined(with: .opacity),
-                            removal: .move(edge: .trailing).combined(with: .opacity)
-                        ))
+            // Different transitions based on whether we're changing months or view modes
+            .modifier(DaysTransitionModifier(slideDirection: slideDirection))
         }
         .frame(height: calendarGridHeight)
         .clipped() // Prevent any content from overflowing
@@ -226,26 +227,45 @@ struct CustomCalendarView: View {
         let monthNames = Calendar.current.monthSymbols
         let columns = Array(repeating: GridItem(.flexible()), count: 3)
         
-        return LazyVGrid(columns: columns, spacing: 20) {
-            ForEach(0..<12) { monthIndex in
-                let month = monthIndex + 1
+        return ZStack(alignment: .top) {
+            // Background container to maintain consistent height
+            Rectangle()
+                .fill(Color.clear)
+                .frame(height: calendarGridHeight)
                 
-                Button(action: {
-                    selectMonth(month)
-                }) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(isCurrentMonth(month) ? Color.blue.opacity(0.2) : Color.clear)
-                            .frame(height: 60)
-                        
-                        Text(monthNames[monthIndex])
-                            .fontWeight(isCurrentMonth(month) ? .bold : .regular)
+            LazyVGrid(columns: columns, spacing: 20) {
+                ForEach(0..<12) { monthIndex in
+                    let month = monthIndex + 1
+                    
+                    Button(action: {
+                        selectMonth(month)
+                    }) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(isCurrentMonth(month) ? Color.blue.opacity(0.2) : Color.clear)
+                                .frame(height: 60)
+                            
+                            Text(monthNames[monthIndex])
+                                .fontWeight(isCurrentMonth(month) ? .bold : .regular)
+                                .foregroundColor(.primary)
+                        }
                     }
                 }
             }
+            .frame(maxHeight: calendarGridHeight) // Maintain same height as days view
         }
         .frame(height: calendarGridHeight)
-        .transition(.opacity)
+        .transition(.asymmetric(
+            // When coming from days or years view, months slide from appropriate direction
+            insertion: isMovingUpInTimeScale ? 
+                .move(edge: .bottom).combined(with: .opacity) : // Coming from days (moving up)
+                .move(edge: .top).combined(with: .opacity),    // Coming from years (moving down)
+            
+            // When going to days or years view, months exit in appropriate direction
+            removal: isMovingUpInTimeScale ? 
+                .move(edge: .bottom).combined(with: .opacity) : // Going to years (moving up)
+                .move(edge: .top).combined(with: .opacity)     // Going to days (moving down)
+        ))
     }
     
     // New view for year selection grid
@@ -255,26 +275,40 @@ struct CustomCalendarView: View {
         let decadeStart = currentYear - (currentYear % 10)
         let columns = Array(repeating: GridItem(.flexible()), count: 3)
         
-        return LazyVGrid(columns: columns, spacing: 20) {
-            ForEach(0..<12) { offset in
-                let year = decadeStart - 1 + offset
+        return ZStack(alignment: .top) {
+            // Background container to maintain consistent height
+            Rectangle()
+                .fill(Color.clear)
+                .frame(height: calendarGridHeight)
                 
-                Button(action: {
-                    selectYear(year)
-                }) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(year == currentYear ? Color.blue.opacity(0.2) : Color.clear)
-                            .frame(height: 60)
-                        
-                        Text("\(year)")
-                            .fontWeight(year == currentYear ? .bold : .regular)
+            LazyVGrid(columns: columns, spacing: 20) {
+                ForEach(0..<12) { offset in
+                    let year = decadeStart - 1 + offset
+                    
+                    Button(action: {
+                        selectYear(year)
+                    }) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(year == currentYear ? Color.blue.opacity(0.2) : Color.clear)
+                                .frame(height: 60)
+                            
+                            Text("\(year)")
+                                .fontWeight(year == currentYear ? .bold : .regular)
+                                .foregroundColor(.primary)
+                        }
                     }
                 }
             }
+            .frame(maxHeight: calendarGridHeight) // Maintain same height as days view
         }
         .frame(height: calendarGridHeight)
-        .transition(.opacity)
+        .transition(.asymmetric(
+            // Always comes from months view (moving up)
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            // Always goes back to months view (moving down)
+            removal: .move(edge: .top).combined(with: .opacity)
+        ))
     }
     
     // Helper to check if month is the current displayed month
@@ -283,7 +317,7 @@ struct CustomCalendarView: View {
         return calendar.component(.month, from: currentMonth) == month
     }
     
-    // Action when a month is selected
+    // Action when a month is selected - going from months -> days (moving down in time scale)
     private func selectMonth(_ month: Int) {
         let calendar = Calendar.current
         let year = calendar.component(.year, from: currentMonth)
@@ -296,13 +330,16 @@ struct CustomCalendarView: View {
             currentMonth = newDate
         }
         
-        // Go back to days view
-        withAnimation {
+        // Go back to days view with animation
+        withAnimation(.easeInOut(duration: 0.4)) {
+            // When going from months -> days (moving down in time scale)
+            slideDirection = .none // Reset slide direction to trigger vertical transition
+            isMovingUpInTimeScale = false // We're moving down in time scale
             calendarViewMode = .days
         }
     }
     
-    // Action when a year is selected
+    // Update the action when a year is selected
     private func selectYear(_ year: Int) {
         let calendar = Calendar.current
         let month = calendar.component(.month, from: currentMonth)
@@ -315,8 +352,9 @@ struct CustomCalendarView: View {
             currentMonth = newDate
         }
         
-        // Go back to months view
-        withAnimation {
+        // Go back to months view with animation
+        withAnimation(.easeInOut(duration: 0.4)) {
+            isMovingUpInTimeScale = false // We're moving down in time scale
             calendarViewMode = .months
         }
     }
@@ -501,6 +539,35 @@ extension Array {
 extension Date {
     var monthInt: Int {
         Calendar.current.component(.month, from: self)
+    }
+}
+
+// Add a new modifier to handle both transitions
+struct DaysTransitionModifier: ViewModifier {
+    let slideDirection: SlideDirection
+    
+    func body(content: Content) -> some View {
+        if slideDirection == .none {
+            // For view mode transitions:
+            // When going from days -> months (moving up): days slide down and disappear
+            // When coming back from months -> days (moving down): days slide down from top
+            content.transition(.asymmetric(
+                insertion: .move(edge: .top).combined(with: .opacity), // Coming from months (moving down)
+                removal: .move(edge: .bottom).combined(with: .opacity) // Going to months (moving up)
+            ))
+        } else if slideDirection == .left {
+            // Horizontal transition when changing months (left)
+            content.transition(.asymmetric(
+                insertion: .move(edge: .trailing).combined(with: .opacity),
+                removal: .move(edge: .leading).combined(with: .opacity)
+            ))
+        } else {
+            // Horizontal transition when changing months (right)
+            content.transition(.asymmetric(
+                insertion: .move(edge: .leading).combined(with: .opacity),
+                removal: .move(edge: .trailing).combined(with: .opacity)
+            ))
+        }
     }
 }
 
