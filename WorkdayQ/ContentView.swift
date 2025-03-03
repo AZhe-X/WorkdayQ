@@ -43,11 +43,40 @@ struct ContentView: View {
                 // Today's Status Card
                 todayStatusCard
                 
-                // Custom Calendar
-                CustomCalendarView(selectedDate: $selectedDate, workDays: workDays)
+                // Custom Calendar with callbacks
+                CustomCalendarView(
+                    selectedDate: $selectedDate,
+                    workDays: workDays,
+                    onToggleWorkStatus: { date in
+                        toggleWorkStatus(for: date)
+                    },
+                    onOpenNoteEditor: { date in
+                        // Set up note editor for the selected date
+                        if let selectedDay = workDays.first(where: { 
+                            Calendar.current.isDate($0.date, inSameDayAs: date)
+                        }) {
+                            noteText = selectedDay.note ?? ""
+                        } else {
+                            noteText = ""
+                        }
+                        showingNoteEditor = true
+                    }
+                )
                 
-                // Controls for selected date
-                dateControlsView
+                // Instructions for interactions
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Tap a day to toggle work/off status", systemImage: "hand.tap")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        Label("Long-press to add or edit notes", systemImage: "hand.tap.fill")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal)
                 
                 Spacer()
             }
@@ -92,7 +121,7 @@ struct ContentView: View {
             }
             
             if let note = todayWorkDay?.note, !note.isEmpty {
-                Text("Note: \(note)")
+                Text(note)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .lineLimit(2)
@@ -104,38 +133,6 @@ struct ContentView: View {
                 .fill(Color(UIColor.systemBackground))
                 .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
         )
-    }
-    
-    var dateControlsView: some View {
-        HStack {
-            Button(action: toggleSelectedDateStatus) {
-                // Treat null as off day
-                let isWorkDay = selectedWorkDay?.isWorkDay ?? false
-                Text(isWorkDay ? "Set as Off Day" : "Set as Work Day")
-                    .font(.headline)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(isWorkDay ? Color.green : Color.red)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-            }
-            
-            Button(action: {
-                if let selectedDay = selectedWorkDay {
-                    noteText = selectedDay.note ?? ""
-                } else {
-                    noteText = ""
-                }
-                showingNoteEditor = true
-            }) {
-                Image(systemName: "note.text")
-                    .font(.headline)
-                    .padding()
-                    .background(Color(UIColor.systemGray5))
-                    .foregroundColor(.primary)
-                    .cornerRadius(10)
-            }
-        }
     }
     
     var noteEditorView: some View {
@@ -182,14 +179,14 @@ struct ContentView: View {
         }
     }
     
-    private func toggleSelectedDateStatus() {
+    private func toggleWorkStatus(for date: Date) {
         let calendar = Calendar.current
-        let selectedDayStart = calendar.startOfDay(for: selectedDate)
+        let dayStart = calendar.startOfDay(for: date)
         
-        if let existingDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: selectedDayStart) }) {
+        if let existingDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: dayStart) }) {
             existingDay.isWorkDay.toggle()
         } else {
-            let newWorkDay = WorkDay(date: selectedDayStart, isWorkDay: true)
+            let newWorkDay = WorkDay(date: dayStart, isWorkDay: true)
             modelContext.insert(newWorkDay)
         }
         

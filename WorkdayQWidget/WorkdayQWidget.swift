@@ -200,7 +200,7 @@ struct TodayWidgetView: View {
                 }
                 
                 if let note = entry.todayWorkDay?.note, !note.isEmpty {
-                    Text("Note: \(note)")
+                    Text(note)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)

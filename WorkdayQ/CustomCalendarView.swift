@@ -8,6 +8,11 @@ import SwiftUI
 struct CustomCalendarView: View {
     @Binding var selectedDate: Date
     let workDays: [WorkDay]
+    @Environment(\.modelContext) private var modelContext
+    
+    // Add callbacks for actions
+    var onToggleWorkStatus: ((Date) -> Void)?
+    var onOpenNoteEditor: ((Date) -> Void)?
     
     @State private var currentMonth = Date()
     
@@ -76,45 +81,55 @@ struct CustomCalendarView: View {
         let hasNote = dayHasNote(date)
         let day = Calendar.current.component(.day, from: date)
         
-        Button(action: {
-            selectedDate = date
-        }) {
-            ZStack {
-                // Always show a circle with appropriate color
+        ZStack {
+            // Always show a circle with appropriate color
+            Circle()
+                .fill(dayWorkDay == true ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
+                .aspectRatio(1, contentMode: .fit)
+            
+            if isSelected {
                 Circle()
-                    .fill(dayWorkDay == true ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
+                    .stroke(Color.blue, lineWidth: 2)
                     .aspectRatio(1, contentMode: .fit)
+            } else if isToday {
+                Circle()
+                    .stroke(Color.gray, lineWidth: 1)
+                    .aspectRatio(1, contentMode: .fit)
+            }
+            
+            VStack(spacing: 2) {
+                Text("\(day)")
+                    .font(.callout)
+                    .fontWeight(isToday ? .bold : .regular)
+                    .foregroundColor(.white) // Always white text for better contrast
                 
-                if isSelected {
+                // Add a small dot indicator when the day has a note
+                if hasNote {
                     Circle()
-                        .stroke(Color.blue, lineWidth: 2)
-                        .aspectRatio(1, contentMode: .fit)
-                } else if isToday {
-                    Circle()
-                        .stroke(Color.gray, lineWidth: 1)
-                        .aspectRatio(1, contentMode: .fit)
-                }
-                
-                VStack(spacing: 2) {
-                    Text("\(day)")
-                        .font(.callout)
-                        .fontWeight(isToday ? .bold : .regular)
-                        .foregroundColor(.white) // Always white text for better contrast
-                    
-                    // Add a small dot indicator when the day has a note
-                    if hasNote {
-                        Circle()
-                            .fill(Color.white)
-                            .frame(width: 4, height: 4)
-                    } else {
-                        // Empty spacer to maintain consistent layout
-                        Spacer().frame(height: 4)
-                    }
+                        .fill(Color.white)
+                        .frame(width: 4, height: 4)
+                } else {
+                    // Empty spacer to maintain consistent layout
+                    Spacer().frame(height: 4)
                 }
             }
         }
         .frame(height: 40)
         .padding(.vertical, 4)
+        // Add tap gesture to toggle work status
+        .onTapGesture {
+            // First select the date (for visual feedback)
+            selectedDate = date
+            // Then toggle the status
+            onToggleWorkStatus?(date)
+        }
+        // Add long press gesture to edit notes
+        .onLongPressGesture {
+            // First select the date
+            selectedDate = date
+            // Then open note editor
+            onOpenNoteEditor?(date)
+        }
     }
     
     private func getDayWorkStatus(_ date: Date) -> Bool {
