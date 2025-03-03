@@ -8,12 +8,20 @@
 import SwiftUI
 import SwiftData
 import WidgetKit
+import UIKit  // Add UIKit import
 
 // Constants for app group synchronization
 let appGroupID = "group.io.azhe.WorkdayQ"
 let lastUpdateKey = "lastDatabaseUpdate"
 let languagePreferenceKey = "languagePreference"
 let customWorkTermKey = "customWorkTerm" // Add key for custom work term storage
+
+// Add extension to dismiss keyboard (place after imports, before constants)
+extension View {
+    func hideKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+}
 
 // Helper to determine if a date is a workday by default
 // (Monday-Friday = workday, Saturday-Sunday = off day)
@@ -58,6 +66,7 @@ struct ContentView: View {
     @State private var showingSettings = false
     @AppStorage(languagePreferenceKey) private var languagePreference = 0 // Default: system
     @AppStorage(customWorkTermKey) private var customWorkTerm = "上班" // Default work term
+    @FocusState private var isCustomTermFieldFocused: Bool // Add focus state
     
     // Add explicit app group UserDefaults access for direct writes
     private let sharedDefaults = UserDefaults(suiteName: appGroupID)
@@ -547,35 +556,65 @@ struct ContentView: View {
                 
                 // Add new section for customizing Chinese work term
                 Section(header: Text(localizedText("Customization", chineseText: "自定义"))) {
-                    VStack(alignment: .leading) {
-                        Text(localizedText("Customize work term (Chinese)", chineseText: "自定义工作用语"))
-                            .font(.subheadline)
+                    ZStack {
+                        Color.clear
+                            .contentShape(Rectangle()) // Make the entire area tappable
+                            .onTapGesture {
+                                // Dismiss keyboard when tapping outside the TextField
+                                isCustomTermFieldFocused = false
+                                hideKeyboard() // Add direct keyboard dismissal
+                            }
                         
-                        TextField("上班", text: $customWorkTerm)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .onChange(of: customWorkTerm) { oldValue, newValue in
-                                // If user clears the field, set back to default
-                                if newValue.isEmpty {
-                                    customWorkTerm = "上班"
+                        VStack(alignment: .leading) {
+                            Text(localizedText("Customize work term (Chinese)", chineseText: "自定义工作用语"))
+                                .font(.subheadline)
+                            
+                            TextField("上班", text: $customWorkTerm)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .focused($isCustomTermFieldFocused) // Keep focused modifier
+                                .onTapGesture {
+                                    // This is redundant with the focused modifier but ensures focus
+                                    isCustomTermFieldFocused = true
                                 }
-                                // Sync to UserDefaults for widget access
-                                syncCustomWorkTerm()
-                                // Reload widgets to show new term
-                                reloadWidgets()
-                            }
+                                .submitLabel(.done) // Set the keyboard return key to "Done"
+                                .toolbar {
+                                    ToolbarItemGroup(placement: .keyboard) {
+                                        Spacer() // Push button to the right
+                                        Button(localizedText("Done", chineseText: "完成")) {
+                                            isCustomTermFieldFocused = false
+                                            hideKeyboard() // Add direct keyboard dismissal
+                                        }
+                                    }
+                                }
+                                .onSubmit {
+                                    // Hide keyboard when user presses "Done" on keyboard
+                                    isCustomTermFieldFocused = false
+                                    hideKeyboard() // Add direct keyboard dismissal
+                                }
+                                .onChange(of: customWorkTerm) { oldValue, newValue in
+                                    // If user clears the field, set back to default
+                                    if newValue.isEmpty {
+                                        customWorkTerm = "上班"
+                                    }
+                                    // Sync to UserDefaults for widget access
+                                    syncCustomWorkTerm()
+                                    // Reload widgets to show new term
+                                    reloadWidgets()
+                                }
                             
-                        Text(localizedText("Examples: 上课 (class), 上学 (school)", chineseText: "例如：上课、上学、值班"))
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            Text(localizedText("Examples: 上课 (class), 上学 (school)", chineseText: "例如：上课、上学、值班"))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                             
-                        if customWorkTerm != "上班" {
-                            Button(localizedText("Reset to Default", chineseText: "重置为默认")) {
-                                customWorkTerm = "上班"
-                                syncCustomWorkTerm()
-                                reloadWidgets()
+                            if customWorkTerm != "上班" {
+                                Button(localizedText("Reset to Default", chineseText: "重置为默认")) {
+                                    customWorkTerm = "上班"
+                                    syncCustomWorkTerm()
+                                    reloadWidgets()
+                                }
+                                .foregroundColor(.blue)
+                                .padding(.top, 2)
                             }
-                            .foregroundColor(.blue)
-                            .padding(.top, 2)
                         }
                     }
                 }
