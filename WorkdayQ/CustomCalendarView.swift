@@ -15,27 +15,93 @@ struct CustomCalendarView: View {
     var onOpenNoteEditor: ((Date) -> Void)?
     
     @State private var currentMonth = Date()
+    @State private var slideDirection: SlideDirection = .none
+    
+    // Fixed sizes to prevent layout shifts
+    private let calendarGridHeight: CGFloat = 300
+    private let dayHeight: CGFloat = 42 // Fixed height for each day
+    private let rowSpacing: CGFloat = 8 // Fixed spacing between rows
+    
+    enum SlideDirection {
+        case none, left, right
+    }
     
     var body: some View {
-        VStack {
+        VStack(alignment: .leading, spacing: 0) {
             monthHeader
             
             dayOfWeekHeader
             
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 10) {
-                ForEach(daysInMonth(), id: \.self) { date in
-                    if date.monthInt != currentMonth.monthInt {
-                        // Days from other months
-                        Text("")
+            // Fixed height container
+            ZStack(alignment: .top) {
+                // Background to ensure fixed size
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(height: calendarGridHeight)
+                
+                // Calendar grid with transition
+                VStack(spacing: 0) {
+                    // Use a fixed number of rows (6) for consistency
+                    let weeks = daysInMonth().chunked(into: 7) // Group days into weeks
+                    
+                    ForEach(0..<6) { weekIndex in
+                        if weekIndex < weeks.count {
+                            HStack(spacing: 0) {
+                                ForEach(0..<7) { dayIndex in
+                                    if dayIndex < weeks[weekIndex].count {
+                                        let date = weeks[weekIndex][dayIndex]
+                                        if date.monthInt != currentMonth.monthInt {
+                                            // Days from other months - empty placeholder
+                                            Color.clear
+                                                .frame(height: dayHeight)
+                                                .frame(maxWidth: .infinity)
+                                        } else {
+                                            // Days from current month
+                                            dayView(for: date)
+                                                .frame(height: dayHeight)
+                                                .frame(maxWidth: .infinity)
+                                        }
+                                    } else {
+                                        Color.clear
+                                            .frame(height: dayHeight)
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                }
+                            }
                             .frame(maxWidth: .infinity)
-                    } else {
-                        // Days from current month
-                        dayView(for: date)
+                        } else {
+                            // Empty row to maintain fixed height
+                            HStack {
+                                ForEach(0..<7, id: \.self) { _ in
+                                    Color.clear
+                                        .frame(height: dayHeight)
+                                        .frame(maxWidth: .infinity)
+                                }
+                            }
+                        }
+                        
+                        if weekIndex < 5 { // Don't add spacing after the last row
+                            Spacer().frame(height: rowSpacing)
+                        }
                     }
                 }
+                .frame(height: calendarGridHeight)
+                .id(currentMonth) // This forces view recreation when month changes
+                .transition(slideDirection == .left ? 
+                            .asymmetric(
+                                insertion: .move(edge: .trailing).combined(with: .opacity),
+                                removal: .move(edge: .leading).combined(with: .opacity)
+                            ) : 
+                            .asymmetric(
+                                insertion: .move(edge: .leading).combined(with: .opacity),
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
             }
+            .frame(height: calendarGridHeight)
+            .clipped() // Prevent any content from overflowing
         }
         .padding(.horizontal)
+        .animation(.easeInOut(duration: 0.3), value: currentMonth)
     }
     
     private var monthHeader: some View {
@@ -71,6 +137,7 @@ struct CustomCalendarView: View {
                     .frame(maxWidth: .infinity)
             }
         }
+        .padding(.bottom, 8) // Add consistent spacing after headers
     }
     
     @ViewBuilder
@@ -86,15 +153,18 @@ struct CustomCalendarView: View {
             Circle()
                 .fill(dayWorkDay == true ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
                 .aspectRatio(1, contentMode: .fit)
+                .frame(width: 36, height: 36) // Fixed size for circles
             
             if isSelected {
                 Circle()
                     .stroke(Color.blue, lineWidth: 2)
                     .aspectRatio(1, contentMode: .fit)
+                    .frame(width: 36, height: 36)
             } else if isToday {
                 Circle()
                     .stroke(Color.gray, lineWidth: 1)
                     .aspectRatio(1, contentMode: .fit)
+                    .frame(width: 36, height: 36)
             }
             
             VStack(spacing: 2) {
@@ -114,8 +184,6 @@ struct CustomCalendarView: View {
                 }
             }
         }
-        .frame(height: 40)
-        .padding(.vertical, 4)
         // Add tap gesture to toggle work status
         .onTapGesture {
             // First select the date (for visual feedback)
@@ -146,6 +214,7 @@ struct CustomCalendarView: View {
     }
     
     private func previousMonth() {
+        slideDirection = .right // Slide to the right when going to previous month
         withAnimation {
             currentMonth = Calendar.current.date(
                 byAdding: .month,
@@ -156,6 +225,7 @@ struct CustomCalendarView: View {
     }
     
     private func nextMonth() {
+        slideDirection = .left // Slide to the left when going to next month
         withAnimation {
             currentMonth = Calendar.current.date(
                 byAdding: .month,
@@ -193,6 +263,15 @@ struct CustomCalendarView: View {
         }
         
         return dates
+    }
+}
+
+// Extension to split array into chunks
+extension Array {
+    func chunked(into size: Int) -> [[Element]] {
+        return stride(from: 0, to: count, by: size).map {
+            Array(self[$0 ..< Swift.min($0 + size, count)])
+        }
     }
 }
 
