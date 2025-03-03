@@ -13,6 +13,7 @@ import SwiftData
 let appGroupID = "group.io.azhe.WorkdayQ"
 let lastUpdateKey = "lastDatabaseUpdate"
 let languagePreferenceKey = "languagePreference" // Add language preference key
+let customWorkTermKey = "customWorkTerm" // Add custom work term key
 
 // Helper to determine if a date is a workday by default
 // (Monday-Friday = workday, Saturday-Sunday = off day)
@@ -298,6 +299,19 @@ struct TodayWidgetView: View {
     // Use direct UserDefaults access with a non-optional default
     private let userDefaults = UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
     
+    // Get the custom work term from UserDefaults, or use default if not set
+    private var customWorkTerm: String {
+        userDefaults.string(forKey: customWorkTermKey) ?? "上班"
+    }
+    
+    // Helper to replace "上班" with custom term
+    private func customizeWorkTerm(_ text: String) -> String {
+        if customWorkTerm == "上班" {
+            return text
+        }
+        return text.replacingOccurrences(of: "上班", with: customWorkTerm)
+    }
+    
     var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
@@ -318,6 +332,7 @@ struct TodayWidgetView: View {
         
         // Debug output - this will appear in the console when widget updates
         print("Widget language preference: \(langPref), useChineseText: \(useChineseText)")
+        print("Widget custom work term: \(customWorkTerm)")
         
         return ZStack {
             // Use system background for consistency with the app
@@ -348,7 +363,7 @@ struct TodayWidgetView: View {
                     
                     // Use different text format for Chinese
                     if useChineseText {
-                        Text(isWorkDay ? "要上班" : "不上班")
+                        Text(customizeWorkTerm(isWorkDay ? "要上班" : "不上班"))
                             .font(.largeTitle)
                             .fontWeight(.bold)
                             .foregroundColor(isWorkDay ? .red : .green)
@@ -395,6 +410,19 @@ struct WeekWidgetView: View {
     // Use direct UserDefaults access with a non-optional default
     private let userDefaults = UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
     
+    // Get the custom work term from UserDefaults, or use default if not set
+    private var customWorkTerm: String {
+        userDefaults.string(forKey: customWorkTermKey) ?? "上班"
+    }
+    
+    // Helper to replace "上班" with custom term
+    private func customizeWorkTerm(_ text: String) -> String {
+        if customWorkTerm == "上班" {
+            return text
+        }
+        return text.replacingOccurrences(of: "上班", with: customWorkTerm)
+    }
+    
     var body: some View {
         // Debug the language preference directly from UserDefaults
         let langPref = userDefaults.integer(forKey: languagePreferenceKey)
@@ -402,6 +430,7 @@ struct WeekWidgetView: View {
         
         // Debug output
         print("Week widget language preference: \(langPref), useChineseText: \(useChineseText)")
+        print("Week widget custom work term: \(customWorkTerm)")
         
         return ZStack {
             Rectangle()
@@ -409,6 +438,18 @@ struct WeekWidgetView: View {
                 .edgesIgnoringSafeArea(.all)
             
             VStack(spacing: 0) {
+                // Add the title at the top - only show in Chinese
+                if useChineseText {
+                    Text(customizeWorkTerm("这几天上班吗？"))
+                        .font(.headline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary) // Make text gray
+                        .frame(maxWidth: .infinity, alignment: .leading) // Align to left
+                        .padding(.top, 8)
+                        .padding(.bottom, 4)
+                        .padding(.leading, 10) // Add left padding
+                }
+                
                 Spacer() // Push content to bottom
                 
                 HStack(alignment: .bottom, spacing: 0) {
@@ -464,7 +505,7 @@ struct WeekWidgetView: View {
             
             ZStack {
                 Circle()
-                    .fill(isWorkDay ? Color.red : Color.green)
+                    .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
                     .frame(width: isLarge ? 44 : 32, height: isLarge ? 44 : 32)
                 
                 Text("\(dayNum)")
@@ -494,6 +535,19 @@ struct SmallWeekWidgetView: View {
     // Use direct UserDefaults access with a non-optional default
     private let userDefaults = UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
     
+    // Get the custom work term from UserDefaults, or use default if not set
+    private var customWorkTerm: String {
+        userDefaults.string(forKey: customWorkTermKey) ?? "上班"
+    }
+    
+    // Helper to replace "上班" with custom term
+    private func customizeWorkTerm(_ text: String) -> String {
+        if customWorkTerm == "上班" {
+            return text
+        }
+        return text.replacingOccurrences(of: "上班", with: customWorkTerm)
+    }
+    
     var body: some View {
         // Debug the language preference directly
         let langPref = userDefaults.integer(forKey: languagePreferenceKey)
@@ -501,6 +555,7 @@ struct SmallWeekWidgetView: View {
         
         // Debug output
         print("Small week widget language preference: \(langPref), useChineseText: \(useChineseText)")
+        print("Small week widget custom work term: \(customWorkTerm)")
         
         return ZStack {
             Rectangle()
@@ -508,6 +563,18 @@ struct SmallWeekWidgetView: View {
                 .edgesIgnoringSafeArea(.all)
             
             VStack(spacing: 0) {
+                // Add the title at the top - only show in Chinese
+                if useChineseText {
+                    Text(customizeWorkTerm("这几天上班吗？"))
+                        .font(.headline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary) // Make text gray
+                        .frame(maxWidth: .infinity, alignment: .leading) // Align to left
+                        .padding(.top, 8)
+                        .padding(.bottom, 4)
+                        .padding(.leading, 10) // Add left padding
+                }
+                
                 Spacer() // Push content to bottom
                 
                 HStack(alignment: .bottom, spacing: 4) {
@@ -553,7 +620,7 @@ struct SmallWeekWidgetView: View {
             
             ZStack {
                 Circle()
-                    .fill(isWorkDay ? Color.red : Color.green)
+                    .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
                     .frame(width: 50, height: 50)
                 
                 Text("\(dayNum)")

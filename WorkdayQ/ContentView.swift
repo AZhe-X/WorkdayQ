@@ -13,6 +13,7 @@ import WidgetKit
 let appGroupID = "group.io.azhe.WorkdayQ"
 let lastUpdateKey = "lastDatabaseUpdate"
 let languagePreferenceKey = "languagePreference"
+let customWorkTermKey = "customWorkTerm" // Add key for custom work term storage
 
 // Helper to determine if a date is a workday by default
 // (Monday-Friday = workday, Saturday-Sunday = off day)
@@ -56,6 +57,7 @@ struct ContentView: View {
     @State private var noteText = ""
     @State private var showingSettings = false
     @AppStorage(languagePreferenceKey) private var languagePreference = 0 // Default: system
+    @AppStorage(customWorkTermKey) private var customWorkTerm = "上班" // Default work term
     
     // Add explicit app group UserDefaults access for direct writes
     private let sharedDefaults = UserDefaults(suiteName: appGroupID)
@@ -112,6 +114,14 @@ struct ContentView: View {
             let preferredLanguage = Locale.current.language.languageCode?.identifier ?? "en"
             return preferredLanguage.hasPrefix("zh") ? chineseText : englishText
         }
+    }
+    
+    // Replace occurrences of "上班" with the custom term in Chinese texts
+    func customizeWorkTerm(_ text: String) -> String {
+        if customWorkTerm == "上班" {
+            return text
+        }
+        return text.replacingOccurrences(of: "上班", with: customWorkTerm)
     }
     
     var body: some View {
@@ -235,7 +245,7 @@ struct ContentView: View {
                 
                 // Use different text format for Chinese
                 if languagePreference == AppLanguage.chinese.rawValue {
-                    Text(isWorkDay ? "要上班" : "不上班")
+                    Text(customizeWorkTerm(isWorkDay ? "要上班" : "不上班"))
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(isWorkDay ? .red : .green)
@@ -406,6 +416,9 @@ struct ContentView: View {
             // Make sure language preference is also synced
             sharedDefaults.set(languagePreference, forKey: languagePreferenceKey)
             
+            // Make sure custom work term is also synced
+            sharedDefaults.set(customWorkTerm, forKey: customWorkTermKey)
+            
             // Force write
             sharedDefaults.synchronize()
             
@@ -531,6 +544,41 @@ struct ContentView: View {
                         Label(localizedText("Privacy Policy", chineseText: "隐私政策"), systemImage: "lock.shield")
                     }
                 }
+                
+                // Add new section for customizing Chinese work term
+                Section(header: Text(localizedText("Customization", chineseText: "自定义"))) {
+                    VStack(alignment: .leading) {
+                        Text(localizedText("Customize work term (Chinese)", chineseText: "自定义工作用语"))
+                            .font(.subheadline)
+                        
+                        TextField("上班", text: $customWorkTerm)
+                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                            .onChange(of: customWorkTerm) { oldValue, newValue in
+                                // If user clears the field, set back to default
+                                if newValue.isEmpty {
+                                    customWorkTerm = "上班"
+                                }
+                                // Sync to UserDefaults for widget access
+                                syncCustomWorkTerm()
+                                // Reload widgets to show new term
+                                reloadWidgets()
+                            }
+                            
+                        Text(localizedText("Examples: 上课 (class), 上学 (school)", chineseText: "例如：上课、上学、值班"))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            
+                        if customWorkTerm != "上班" {
+                            Button(localizedText("Reset to Default", chineseText: "重置为默认")) {
+                                customWorkTerm = "上班"
+                                syncCustomWorkTerm()
+                                reloadWidgets()
+                            }
+                            .foregroundColor(.blue)
+                            .padding(.top, 2)
+                        }
+                    }
+                }
             }
             .navigationTitle(localizedText("Settings", chineseText: "设置"))
             .navigationBarTitleDisplayMode(.inline)
@@ -566,6 +614,20 @@ struct ContentView: View {
         sharedDefaults.synchronize() // Force immediate write
         
         print("Synced language preference to UserDefaults: \(languagePreference)")
+    }
+    
+    // New function to sync custom work term to shared UserDefaults
+    private func syncCustomWorkTerm() {
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupID) else {
+            print("Failed to access shared UserDefaults")
+            return
+        }
+        
+        // Set the custom work term in shared UserDefaults
+        sharedDefaults.set(customWorkTerm, forKey: customWorkTermKey)
+        sharedDefaults.synchronize() // Force immediate write
+        
+        print("Synced custom work term to UserDefaults: \(customWorkTerm)")
     }
 }
 
