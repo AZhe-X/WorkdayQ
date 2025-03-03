@@ -39,7 +39,7 @@ struct CustomCalendarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header changes based on view mode
-            calendarHeader
+            headerView
             
             // Content changes based on view mode
             switch calendarViewMode {
@@ -57,19 +57,61 @@ struct CustomCalendarView: View {
         .animation(.easeInOut(duration: 0.3), value: calendarViewMode)
     }
     
-    // Dynamic header based on current view mode
-    private var calendarHeader: some View {
+    // Create a computed property for each header type with its own transition
+    private var headerView: some View {
+        ZStack {
+            // Only one of these will be visible at a time due to the if conditions
+            if calendarViewMode == .days {
+                monthYearHeader
+                    .transition(.asymmetric(
+                        insertion: isMovingUpInTimeScale ? 
+                            .move(edge: .top).combined(with: .opacity) :
+                            .move(edge: .bottom).combined(with: .opacity),
+                        removal: isMovingUpInTimeScale ? 
+                            .move(edge: .bottom).combined(with: .opacity) :
+                            .move(edge: .top).combined(with: .opacity)
+                    ))
+                    .id("month-year-header")
+            } else if calendarViewMode == .months {
+                yearHeader
+                    .transition(.asymmetric(
+                        insertion: isMovingUpInTimeScale ? 
+                            .move(edge: .bottom).combined(with: .opacity) :
+                            .move(edge: .top).combined(with: .opacity),
+                        removal: isMovingUpInTimeScale ? 
+                            .move(edge: .bottom).combined(with: .opacity) :
+                            .move(edge: .top).combined(with: .opacity)
+                    ))
+                    .id("year-header")
+            } else {
+                decadeHeader
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .bottom).combined(with: .opacity),
+                        removal: .move(edge: .top).combined(with: .opacity)
+                    ))
+                    .id("decade-header")
+            }
+        }
+    }
+    
+    // Header showing Month Year (e.g., "March 2025")
+    private var monthYearHeader: some View {
         HStack {
-            Button(action: navigatePrevious) {
+            Button(action: previousMonth) {
                 Image(systemName: "chevron.left")
                     .foregroundColor(.primary)
             }
             
             Spacer()
             
-            // Title changes based on view mode and is tappable
-            Button(action: advanceToNextViewMode) {
-                Text(headerTitle)
+            // Month + Year title
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    isMovingUpInTimeScale = true
+                    calendarViewMode = .months
+                }
+            }) {
+                Text(currentMonth.formatted(.dateTime.month().year()))
                     .font(.title2)
                     .fontWeight(.semibold)
                     .foregroundColor(.primary)
@@ -77,7 +119,7 @@ struct CustomCalendarView: View {
             
             Spacer()
             
-            Button(action: navigateNext) {
+            Button(action: nextMonth) {
                 Image(systemName: "chevron.right")
                     .foregroundColor(.primary)
             }
@@ -85,66 +127,69 @@ struct CustomCalendarView: View {
         .padding(.vertical)
     }
     
-    // Title text changes based on current view mode
-    private var headerTitle: String {
-        let calendar = Calendar.current
-        switch calendarViewMode {
-        case .days:
-            // Show month and year
-            return currentMonth.formatted(.dateTime.month().year())
-        case .months:
-            // Show just the year
-            return String(calendar.component(.year, from: currentMonth))
-        case .years:
-            // Show year range
-            let year = calendar.component(.year, from: currentMonth)
-            let decadeStart = year - (year % 10)
-            return "\(decadeStart) - \(decadeStart + 9)"
-        }
-    }
-    
-    // Action for the title button
-    private func advanceToNextViewMode() {
-        withAnimation(.easeInOut(duration: 0.4)) {
-            // Reset slide direction to enable vertical transitions
-            slideDirection = .none
-            // We're moving up in time scale (day->month->year)
-            isMovingUpInTimeScale = true
-            switch calendarViewMode {
-            case .days:
-                calendarViewMode = .months
-            case .months:
-                calendarViewMode = .years
-            case .years:
-                // Already at highest level, do nothing
-                break
+    // Header showing just Year (e.g., "2025")
+    private var yearHeader: some View {
+        HStack {
+            Button(action: previousYear) {
+                Image(systemName: "chevron.left")
+                    .foregroundColor(.primary)
+            }
+            
+            Spacer()
+            
+            // Year title
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    isMovingUpInTimeScale = true
+                    calendarViewMode = .years
+                }
+            }) {
+                Text(String(Calendar.current.component(.year, from: currentMonth)))
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+            }
+            
+            Spacer()
+            
+            Button(action: nextYear) {
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.primary)
             }
         }
+        .padding(.vertical)
     }
     
-    // Navigation buttons do different things based on view mode
-    private func navigatePrevious() {
-        switch calendarViewMode {
-        case .days:
-            previousMonth()
-        case .months:
-            previousYear()
-        case .years:
-            previousDecade()
+    // Header showing Decade range (e.g., "2020 - 2029")
+    private var decadeHeader: some View {
+        let year = Calendar.current.component(.year, from: currentMonth)
+        let decadeStart = year - (year % 10)
+        
+        return HStack {
+            Button(action: previousDecade) {
+                Image(systemName: "chevron.left")
+                    .foregroundColor(.primary)
+            }
+            
+            Spacer()
+            
+            // Decade title (not clickable as there's no higher level)
+            Text("\(decadeStart) - \(decadeStart + 9)")
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+            
+            Spacer()
+            
+            Button(action: nextDecade) {
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.primary)
+            }
         }
+        .padding(.vertical)
     }
     
-    private func navigateNext() {
-        switch calendarViewMode {
-        case .days:
-            nextMonth()
-        case .months:
-            nextYear()
-        case .years:
-            nextDecade()
-        }
-    }
-    
+    // Day of week header (Sun, Mon, Tue, etc.)
     private var dayOfWeekHeader: some View {
         HStack {
             ForEach(Calendar.current.shortWeekdaySymbols, id: \.self) { day in
