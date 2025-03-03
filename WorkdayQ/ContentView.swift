@@ -326,10 +326,14 @@ struct ContentView: View {
         .frame(maxWidth: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 20) // iOS widget corner radius
-                .fill(Color(UIColor.systemBackground))
+                .fill(
+                    AppAppearance(rawValue: appearancePreference)?.colorScheme == .dark 
+                    ? Color(red: 0.11, green: 0.11, blue: 0.12) // iOS native dark background color
+                    : Color.white
+                )
                 .shadow(color: Color(UIColor { traitCollection in
-                    traitCollection.userInterfaceStyle == .dark ? .white : .black
-                }).opacity(0.5), radius: 5, x: 0, y: 2)
+                    traitCollection.userInterfaceStyle == .dark ? .black : .black
+                }).opacity(0.2), radius: 5, x: 0, y: 2)
         )
     }
     

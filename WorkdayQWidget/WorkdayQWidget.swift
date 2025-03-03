@@ -435,7 +435,7 @@ struct TodayWidgetView: View {
             // Use direct color scheme detection for the background
             if colorScheme == .dark {
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.black)
+                    .fill(Color(red: 0.11, green: 0.11, blue: 0.12)) // iOS native dark background color
             } else {
                 RoundedRectangle(cornerRadius: 20)
                     .fill(Color.white)
@@ -502,7 +502,7 @@ struct WeekWidgetView: View {
         .containerBackground(for: .widget) {
             // Use direct color scheme detection for the background
             if colorScheme == .dark {
-                Color.black
+                Color(red: 0.11, green: 0.11, blue: 0.12) // iOS native dark background color
             } else {
                 Color.white
             }
@@ -631,7 +631,7 @@ struct SmallWeekWidgetView: View {
         .containerBackground(for: .widget) {
             // Use direct color scheme detection for the background
             if colorScheme == .dark {
-                Color.black
+                Color(red: 0.11, green: 0.11, blue: 0.12) // iOS native dark background color
             } else {
                 Color.white
             }
