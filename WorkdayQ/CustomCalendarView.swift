@@ -22,6 +22,9 @@ struct CustomCalendarView: View {
     // Add a language preference parameter
     var languagePreference: Int = 0
     
+    // Add start of week preference parameter
+    var startOfWeekPreference: Int = 0
+    
     // Add callbacks for actions
     var onToggleWorkStatus: ((Date) -> Void)?
     var onOpenNoteEditor: ((Date) -> Void)?
@@ -41,11 +44,36 @@ struct CustomCalendarView: View {
     // Helper to get localized day names based on language preference
     private var localizedWeekdaySymbols: [String] {
         let language = AppLanguage(rawValue: languagePreference) ?? .systemDefault
+        let calendar = Calendar.current
         
         if language == .chinese {
-            return ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+            // Chinese weekday symbols
+            let chineseSymbols = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+            
+            // Re-order based on start of week preference
+            if startOfWeekPreference == 1 { // Monday start
+                // Move Sunday to the end
+                var mondayFirstSymbols = Array(chineseSymbols[1...]) // Monday to Saturday
+                mondayFirstSymbols.append(chineseSymbols[0]) // Add Sunday at the end
+                return mondayFirstSymbols
+            } else {
+                // Default Sunday start
+                return chineseSymbols
+            }
         } else {
-            return Calendar.current.shortWeekdaySymbols
+            // Get system weekday symbols
+            let symbols = calendar.shortWeekdaySymbols
+            
+            // Re-order based on start of week preference
+            if startOfWeekPreference == 1 { // Monday start
+                // Move Sunday to the end
+                var mondayFirstSymbols = Array(symbols[1...]) // Monday to Saturday
+                mondayFirstSymbols.append(symbols[0]) // Add Sunday at the end
+                return mondayFirstSymbols
+            } else {
+                // Default Sunday start
+                return symbols
+            }
         }
     }
     
@@ -521,7 +549,15 @@ struct CustomCalendarView: View {
         
         // Get the first day of the week for the starting point
         let firstDayWeekday = calendar.component(.weekday, from: firstDayOfMonth)
-        let weekdayIndex = firstDayWeekday - 1 // 0-indexed weekday
+        
+        // Calculate weekday index based on start of week preference
+        var weekdayIndex: Int
+        if startOfWeekPreference == 1 { // Monday start
+            // Convert weekday to Monday-based index (Monday=0, Sunday=6)
+            weekdayIndex = (firstDayWeekday + 5) % 7
+        } else { // Sunday start
+            weekdayIndex = firstDayWeekday - 1 // Standard 0-indexed weekday (Sunday=0)
+        }
         
         // Calculate the start date (which might be in the previous month)
         let startDate = calendar.date(
@@ -615,7 +651,8 @@ struct CustomCalendarView_Previews: PreviewProvider {
                 WorkDay(date: Date(), isWorkDay: true),
                 WorkDay(date: Calendar.current.date(byAdding: .day, value: 1, to: Date())!, isWorkDay: false),
                 WorkDay(date: Calendar.current.date(byAdding: .day, value: 2, to: Date())!, isWorkDay: true)
-            ]
+            ],
+            startOfWeekPreference: 0 // Sunday start for preview
         )
         .padding()
         .background(Color(UIColor.systemBackground))

@@ -15,6 +15,7 @@ let lastUpdateKey = "lastDatabaseUpdate"
 let languagePreferenceKey = "languagePreference" // Add language preference key
 let customWorkTermKey = "customWorkTerm" // Add custom work term key
 let appearancePreferenceKey = "appearancePreference" // Add appearance preference key
+let startOfWeekPreferenceKey = "startOfWeekPreference" // Add start of week preference key
 
 // Helper to determine if a date is a workday by default
 // (Monday-Friday = workday, Saturday-Sunday = off day)
@@ -86,6 +87,9 @@ struct Provider: TimelineProvider {
             // Get appearance preference
             let appearancePref = sharedDefaults?.integer(forKey: appearancePreferenceKey) ?? 0
             let preferredColorScheme = AppAppearance.colorSchemeFromPreference(appearancePref)
+            
+            // Get start of week preference
+            let startOfWeekPref = sharedDefaults?.integer(forKey: startOfWeekPreferenceKey) ?? 0
             
             // DEBUG: Check language preference
             let langPref = sharedDefaults?.integer(forKey: languagePreferenceKey) ?? 0
@@ -223,7 +227,8 @@ struct Provider: TimelineProvider {
                 date: currentDate, 
                 workDays: workDays, 
                 lastUpdateTime: lastUpdate,
-                preferredColorScheme: preferredColorScheme
+                preferredColorScheme: preferredColorScheme,
+                startOfWeekPreference: startOfWeekPref
             )
             
             // Update refresh strategy based on context
@@ -252,13 +257,15 @@ struct DayEntry: TimelineEntry {
     let workDays: [WorkDayStruct]
     let lastUpdateTime: TimeInterval  // Track when data was last updated
     let preferredColorScheme: ColorScheme?
+    let startOfWeekPreference: Int // Sunday=0, Monday=1
     
     // Use initializer with default parameters
-    init(date: Date, workDays: [WorkDayStruct], lastUpdateTime: TimeInterval, preferredColorScheme: ColorScheme? = nil) {
+    init(date: Date, workDays: [WorkDayStruct], lastUpdateTime: TimeInterval, preferredColorScheme: ColorScheme? = nil, startOfWeekPreference: Int = 0) {
         self.date = date
         self.workDays = workDays
         self.lastUpdateTime = lastUpdateTime
         self.preferredColorScheme = preferredColorScheme
+        self.startOfWeekPreference = startOfWeekPreference
     }
     
     var todayWorkDay: WorkDayStruct? {

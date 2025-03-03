@@ -16,6 +16,7 @@ let lastUpdateKey = "lastDatabaseUpdate"
 let languagePreferenceKey = "languagePreference"
 let customWorkTermKey = "customWorkTerm" // Add key for custom work term storage
 let appearancePreferenceKey = "appearancePreference" // Add key for dark mode preference
+let startOfWeekPreferenceKey = "startOfWeekPreference" // Add key for week start preference
 
 // Add extension to dismiss keyboard (place after imports, before constants)
 extension View {
@@ -93,6 +94,7 @@ struct ContentView: View {
     @AppStorage(languagePreferenceKey) private var languagePreference = 0 // Default: system
     @AppStorage(customWorkTermKey) private var customWorkTerm = "上班" // Default work term
     @AppStorage(appearancePreferenceKey) private var appearancePreference = 0 // Default: system
+    @AppStorage(startOfWeekPreferenceKey) private var startOfWeekPreference = 0 // Default: Sunday (0)
     @FocusState private var isCustomTermFieldFocused: Bool // Add focus state
     
     // Add explicit app group UserDefaults access for direct writes
@@ -171,6 +173,7 @@ struct ContentView: View {
                     selectedDate: $selectedDate,
                     workDays: workDays,
                     languagePreference: languagePreference,
+                    startOfWeekPreference: startOfWeekPreference,
                     onToggleWorkStatus: { date in
                         toggleWorkStatus(for: date)
                     },
@@ -474,6 +477,9 @@ struct ContentView: View {
             // Make sure appearance preference is also synced
             sharedDefaults.set(appearancePreference, forKey: appearancePreferenceKey)
             
+            // Make sure start of week preference is also synced
+            sharedDefaults.set(startOfWeekPreference, forKey: startOfWeekPreferenceKey)
+            
             // Force write
             sharedDefaults.synchronize()
             
@@ -576,11 +582,16 @@ struct ContentView: View {
                         reloadWidgets()
                     }
                     
-                    Picker(localizedText("Start of Week", chineseText: "每周开始日"), selection: .constant(0)) {
+                    Picker(localizedText("Start of Week", chineseText: "每周开始日"), selection: $startOfWeekPreference) {
                         Text(localizedText("Sunday", chineseText: "周日")).tag(0)
                         Text(localizedText("Monday", chineseText: "周一")).tag(1)
                     }
-                    .disabled(true) // Placeholder for future implementation
+                    .onChange(of: startOfWeekPreference) { oldValue, newValue in
+                        // Sync the start of week preference to UserDefaults for widget access
+                        syncStartOfWeekPreference()
+                        // Force widgets to reload with new start of week
+                        reloadWidgets()
+                    }
                 }
                 
                 Section(header: Text(localizedText("Data", chineseText: "数据"))) {
@@ -737,6 +748,20 @@ struct ContentView: View {
         sharedDefaults.synchronize() // Force immediate write
         
         print("Synced appearance preference to UserDefaults: \(appearancePreference)")
+    }
+
+    // Add function to sync start of week preference to shared UserDefaults
+    private func syncStartOfWeekPreference() {
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupID) else {
+            print("Failed to access shared UserDefaults")
+            return
+        }
+        
+        // Set the start of week preference in shared UserDefaults
+        sharedDefaults.set(startOfWeekPreference, forKey: startOfWeekPreferenceKey)
+        sharedDefaults.synchronize() // Force immediate write
+        
+        print("Synced start of week preference to UserDefaults: \(startOfWeekPreference)")
     }
 }
 
