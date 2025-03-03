@@ -1,0 +1,580 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		657838BB2D75C1F4006B6FBF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6578389E2D75C1F3006B6FBF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 657838A52D75C1F3006B6FBF;
+			remoteInfo = WorkdayQ;
+		};
+		657838C52D75C1F4006B6FBF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6578389E2D75C1F3006B6FBF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 657838A52D75C1F3006B6FBF;
+			remoteInfo = WorkdayQ;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		657838A62D75C1F3006B6FBF /* WorkdayQ.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WorkdayQ.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		657838BA2D75C1F4006B6FBF /* WorkdayQTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WorkdayQTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		657838C42D75C1F4006B6FBF /* WorkdayQUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WorkdayQUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		657838CC2D75C1F4006B6FBF /* Exceptions for "WorkdayQ" folder in "WorkdayQ" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 657838A52D75C1F3006B6FBF /* WorkdayQ */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		657838A82D75C1F3006B6FBF /* WorkdayQ */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				657838CC2D75C1F4006B6FBF /* Exceptions for "WorkdayQ" folder in "WorkdayQ" target */,
+			);
+			path = WorkdayQ;
+			sourceTree = "<group>";
+		};
+		657838BD2D75C1F4006B6FBF /* WorkdayQTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WorkdayQTests;
+			sourceTree = "<group>";
+		};
+		657838C72D75C1F4006B6FBF /* WorkdayQUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WorkdayQUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		657838A32D75C1F3006B6FBF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		657838B72D75C1F4006B6FBF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		657838C12D75C1F4006B6FBF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		6578389D2D75C1F3006B6FBF = {
+			isa = PBXGroup;
+			children = (
+				657838A82D75C1F3006B6FBF /* WorkdayQ */,
+				657838BD2D75C1F4006B6FBF /* WorkdayQTests */,
+				657838C72D75C1F4006B6FBF /* WorkdayQUITests */,
+				657838A72D75C1F3006B6FBF /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		657838A72D75C1F3006B6FBF /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				657838A62D75C1F3006B6FBF /* WorkdayQ.app */,
+				657838BA2D75C1F4006B6FBF /* WorkdayQTests.xctest */,
+				657838C42D75C1F4006B6FBF /* WorkdayQUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		657838A52D75C1F3006B6FBF /* WorkdayQ */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 657838CD2D75C1F4006B6FBF /* Build configuration list for PBXNativeTarget "WorkdayQ" */;
+			buildPhases = (
+				657838A22D75C1F3006B6FBF /* Sources */,
+				657838A32D75C1F3006B6FBF /* Frameworks */,
+				657838A42D75C1F3006B6FBF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				657838A82D75C1F3006B6FBF /* WorkdayQ */,
+			);
+			name = WorkdayQ;
+			packageProductDependencies = (
+			);
+			productName = WorkdayQ;
+			productReference = 657838A62D75C1F3006B6FBF /* WorkdayQ.app */;
+			productType = "com.apple.product-type.application";
+		};
+		657838B92D75C1F4006B6FBF /* WorkdayQTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 657838D22D75C1F4006B6FBF /* Build configuration list for PBXNativeTarget "WorkdayQTests" */;
+			buildPhases = (
+				657838B62D75C1F4006B6FBF /* Sources */,
+				657838B72D75C1F4006B6FBF /* Frameworks */,
+				657838B82D75C1F4006B6FBF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				657838BC2D75C1F4006B6FBF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				657838BD2D75C1F4006B6FBF /* WorkdayQTests */,
+			);
+			name = WorkdayQTests;
+			packageProductDependencies = (
+			);
+			productName = WorkdayQTests;
+			productReference = 657838BA2D75C1F4006B6FBF /* WorkdayQTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		657838C32D75C1F4006B6FBF /* WorkdayQUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 657838D52D75C1F4006B6FBF /* Build configuration list for PBXNativeTarget "WorkdayQUITests" */;
+			buildPhases = (
+				657838C02D75C1F4006B6FBF /* Sources */,
+				657838C12D75C1F4006B6FBF /* Frameworks */,
+				657838C22D75C1F4006B6FBF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				657838C62D75C1F4006B6FBF /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				657838C72D75C1F4006B6FBF /* WorkdayQUITests */,
+			);
+			name = WorkdayQUITests;
+			packageProductDependencies = (
+			);
+			productName = WorkdayQUITests;
+			productReference = 657838C42D75C1F4006B6FBF /* WorkdayQUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		6578389E2D75C1F3006B6FBF /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					657838A52D75C1F3006B6FBF = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					657838B92D75C1F4006B6FBF = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 657838A52D75C1F3006B6FBF;
+					};
+					657838C32D75C1F4006B6FBF = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 657838A52D75C1F3006B6FBF;
+					};
+				};
+			};
+			buildConfigurationList = 657838A12D75C1F3006B6FBF /* Build configuration list for PBXProject "WorkdayQ" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 6578389D2D75C1F3006B6FBF;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 657838A72D75C1F3006B6FBF /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				657838A52D75C1F3006B6FBF /* WorkdayQ */,
+				657838B92D75C1F4006B6FBF /* WorkdayQTests */,
+				657838C32D75C1F4006B6FBF /* WorkdayQUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		657838A42D75C1F3006B6FBF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		657838B82D75C1F4006B6FBF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		657838C22D75C1F4006B6FBF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		657838A22D75C1F3006B6FBF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		657838B62D75C1F4006B6FBF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		657838C02D75C1F4006B6FBF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		657838BC2D75C1F4006B6FBF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 657838A52D75C1F3006B6FBF /* WorkdayQ */;
+			targetProxy = 657838BB2D75C1F4006B6FBF /* PBXContainerItemProxy */;
+		};
+		657838C62D75C1F4006B6FBF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 657838A52D75C1F3006B6FBF /* WorkdayQ */;
+			targetProxy = 657838C52D75C1F4006B6FBF /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		657838CE2D75C1F4006B6FBF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WorkdayQ/WorkdayQ.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"WorkdayQ/Preview Content\"";
+				DEVELOPMENT_TEAM = TZ925L97X6;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WorkdayQ/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.azhe.WorkdayQ;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		657838CF2D75C1F4006B6FBF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = WorkdayQ/WorkdayQ.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"WorkdayQ/Preview Content\"";
+				DEVELOPMENT_TEAM = TZ925L97X6;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WorkdayQ/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.azhe.WorkdayQ;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		657838D02D75C1F4006B6FBF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		657838D12D75C1F4006B6FBF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		657838D32D75C1F4006B6FBF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TZ925L97X6;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.azhe.WorkdayQTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WorkdayQ.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/WorkdayQ";
+			};
+			name = Debug;
+		};
+		657838D42D75C1F4006B6FBF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TZ925L97X6;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.2;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.azhe.WorkdayQTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/WorkdayQ.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/WorkdayQ";
+			};
+			name = Release;
+		};
+		657838D62D75C1F4006B6FBF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TZ925L97X6;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.azhe.WorkdayQUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = WorkdayQ;
+			};
+			name = Debug;
+		};
+		657838D72D75C1F4006B6FBF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = TZ925L97X6;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.azhe.WorkdayQUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = WorkdayQ;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		657838A12D75C1F3006B6FBF /* Build configuration list for PBXProject "WorkdayQ" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				657838D02D75C1F4006B6FBF /* Debug */,
+				657838D12D75C1F4006B6FBF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		657838CD2D75C1F4006B6FBF /* Build configuration list for PBXNativeTarget "WorkdayQ" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				657838CE2D75C1F4006B6FBF /* Debug */,
+				657838CF2D75C1F4006B6FBF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		657838D22D75C1F4006B6FBF /* Build configuration list for PBXNativeTarget "WorkdayQTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				657838D32D75C1F4006B6FBF /* Debug */,
+				657838D42D75C1F4006B6FBF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		657838D52D75C1F4006B6FBF /* Build configuration list for PBXNativeTarget "WorkdayQUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				657838D62D75C1F4006B6FBF /* Debug */,
+				657838D72D75C1F4006B6FBF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 6578389E2D75C1F3006B6FBF /* Project object */;
+}
