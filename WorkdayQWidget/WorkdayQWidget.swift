@@ -31,13 +31,6 @@ struct Provider: TimelineProvider {
             let lastUpdate = sharedDefaults?.double(forKey: lastUpdateKey) ?? 0
             print("Widget checking for updates, last update: \(Date(timeIntervalSince1970: lastUpdate))")
             
-            // Access SwiftData container from AppGroup
-            let modelConfiguration = ModelConfiguration(
-                schema: Schema([WorkDay.self]),
-                isStoredInMemoryOnly: false,
-                groupContainer: .identifier(appGroupID)
-            )
-            
             // Get the current date normalized to start of day for consistency
             let currentDate = Calendar.current.startOfDay(for: Date())
             print("Widget timeline generating for date: \(currentDate)")
@@ -45,10 +38,70 @@ struct Provider: TimelineProvider {
             var workDays: [WorkDayStruct] = []
             
             do {
-                let modelContainer = try ModelContainer(for: WorkDay.self, configurations: modelConfiguration)
+                // Create a more resilient model configuration
+                let schema = Schema([WorkDay.self])
                 
+                // Configure model with explicit migration options to avoid write attempts
+                let modelConfiguration = ModelConfiguration(
+                    schema: schema,
+                    isStoredInMemoryOnly: false,
+                    allowsSave: false, // Read-only access for widget
+                    groupContainer: .identifier(appGroupID)
+                )
+                
+                // Set extra options that might help with read-only access
+                // We can't set async loading directly, but we can check the URL exists
+                if let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID) {
+                    let storeURL = containerURL.appendingPathComponent("default.store")
+                    if FileManager.default.fileExists(atPath: storeURL.path) {
+                        print("Widget found database at: \(storeURL.path)")
+                    } else {
+                        print("Widget: database not found at expected location")
+                    }
+                }
+                
+                // Try to create the container with error handling
+                let modelContainer: ModelContainer
+                do {
+                    // First try with read-only configuration 
+                    modelContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
+                    print("Widget successfully created ModelContainer")
+                } catch {
+                    print("Widget error creating ModelContainer: \(error.localizedDescription)")
+                    
+                    // Attempt to create a container with more relaxed options
+                    print("Widget trying alternative container configuration...")
+                    let altConfig = ModelConfiguration(
+                        schema: schema,
+                        isStoredInMemoryOnly: true, // Use memory-only as fallback
+                        groupContainer: .identifier(appGroupID)
+                    )
+                    
+                    do {
+                        modelContainer = try ModelContainer(for: schema, configurations: [altConfig])
+                        print("Widget created memory-only ModelContainer as fallback")
+                    } catch {
+                        // If that still fails, just use a basic in-memory container
+                        print("Widget falling back to basic memory container")
+                        let fallbackConfig = ModelConfiguration(isStoredInMemoryOnly: true)
+                        modelContainer = try ModelContainer(for: schema, configurations: [fallbackConfig])
+                        
+                        // Re-throw the error to use the UserDefaults fallback data
+                        throw error
+                    }
+                }
+                
+                // Create a fetch descriptor with error handling
                 let descriptor = FetchDescriptor<WorkDay>(sortBy: [SortDescriptor(\.date)])
-                let fetchedData = try modelContainer.mainContext.fetch(descriptor)
+                
+                // Fetch data with additional error handling
+                let fetchedData: [WorkDay]
+                do {
+                    fetchedData = try modelContainer.mainContext.fetch(descriptor)
+                } catch {
+                    print("Widget error fetching data: \(error.localizedDescription)")
+                    throw error
+                }
                 
                 // Convert SwiftData models to our struct representation
                 workDays = fetchedData.map { convertToWorkDayStruct($0) }
@@ -76,11 +129,32 @@ struct Provider: TimelineProvider {
                 }
             } catch {
                 print("Widget error loading data: \(error.localizedDescription)")
-                // Create sample data for debugging
-                workDays = [
-                    WorkDayStruct(date: currentDate, isWorkDay: true),
-                    WorkDayStruct(date: Calendar.current.date(byAdding: .day, value: 1, to: currentDate)!, isWorkDay: false)
-                ]
+                
+                // Try to get data from UserDefaults as backup
+                workDays = loadWorkDaysFromUserDefaults() ?? []
+                
+                // If no data in UserDefaults either, create sample fallback data
+                if workDays.isEmpty {
+                    print("Widget using fallback sample data")
+                    let today = currentDate
+                    let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+                    
+                    workDays = [
+                        WorkDayStruct(date: today, isWorkDay: true, note: "Widget fallback: Database access error"),
+                        WorkDayStruct(date: tomorrow, isWorkDay: false, note: "Try reopening the main app")
+                    ]
+                    
+                    // Create a week of sample data
+                    for i in 2...6 {
+                        if let futureDate = Calendar.current.date(byAdding: .day, value: i, to: today) {
+                            workDays.append(WorkDayStruct(
+                                date: futureDate,
+                                isWorkDay: i % 2 == 0, // Alternate work/off days
+                                note: nil
+                            ))
+                        }
+                    }
+                }
             }
             
             // Create a timeline entry for now - use the normalized date
@@ -408,7 +482,7 @@ struct WorkDayStruct: Identifiable {
 // IMPORTANT: Must EXACTLY match the name in the main app
 @Model
 final class WorkDay {
-    var date: Date
+    @Attribute(.unique) var date: Date
     var isWorkDay: Bool
     var note: String?
     
@@ -448,6 +522,46 @@ fileprivate func createTestWorkDays() -> [WorkDayStruct] {
     }
     
     return testWorkDays
+}
+
+// Helper function to load data from UserDefaults as backup
+private func loadWorkDaysFromUserDefaults() -> [WorkDayStruct]? {
+    guard let sharedDefaults = UserDefaults(suiteName: appGroupID) else {
+        return nil
+    }
+    
+    // Try to load serialized work day data
+    if let savedData = sharedDefaults.data(forKey: "cachedWorkDays") {
+        do {
+            // Attempt to decode the data
+            if let decodedData = try NSKeyedUnarchiver.unarchivedObject(
+                ofClasses: [NSArray.self, NSDate.self, NSNumber.self, NSString.self],
+                from: savedData) as? [[String: Any]] {
+                
+                // Convert the dictionaries to WorkDayStruct objects
+                var workDays: [WorkDayStruct] = []
+                
+                for dict in decodedData {
+                    if let date = dict["date"] as? Date,
+                       let isWorkDay = dict["isWorkDay"] as? Bool {
+                        let note = dict["note"] as? String
+                        workDays.append(WorkDayStruct(
+                            date: date,
+                            isWorkDay: isWorkDay,
+                            note: note
+                        ))
+                    }
+                }
+                
+                print("Widget loaded \(workDays.count) work days from UserDefaults")
+                return workDays
+            }
+        } catch {
+            print("Widget error decoding UserDefaults data: \(error)")
+        }
+    }
+    
+    return nil
 }
 
 #Preview(as: .systemSmall) {
