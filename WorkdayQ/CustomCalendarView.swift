@@ -73,6 +73,7 @@ struct CustomCalendarView: View {
         let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
         let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
         let dayWorkDay = getDayWorkStatus(date)
+        let hasNote = dayHasNote(date)
         let day = Calendar.current.component(.day, from: date)
         
         Button(action: {
@@ -94,10 +95,22 @@ struct CustomCalendarView: View {
                         .aspectRatio(1, contentMode: .fit)
                 }
                 
-                Text("\(day)")
-                    .font(.callout)
-                    .fontWeight(isToday ? .bold : .regular)
-                    .foregroundColor(.white) // Always white text for better contrast
+                VStack(spacing: 2) {
+                    Text("\(day)")
+                        .font(.callout)
+                        .fontWeight(isToday ? .bold : .regular)
+                        .foregroundColor(.white) // Always white text for better contrast
+                    
+                    // Add a small dot indicator when the day has a note
+                    if hasNote {
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 4, height: 4)
+                    } else {
+                        // Empty spacer to maintain consistent layout
+                        Spacer().frame(height: 4)
+                    }
+                }
             }
         }
         .frame(height: 40)
@@ -107,6 +120,14 @@ struct CustomCalendarView: View {
     private func getDayWorkStatus(_ date: Date) -> Bool {
         let calendar = Calendar.current
         return workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) })?.isWorkDay ?? false
+    }
+    
+    private func dayHasNote(_ date: Date) -> Bool {
+        let calendar = Calendar.current
+        if let workDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            return workDay.note != nil && !workDay.note!.isEmpty
+        }
+        return false
     }
     
     private func previousMonth() {
