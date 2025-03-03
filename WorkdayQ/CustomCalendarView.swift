@@ -19,6 +19,9 @@ struct CustomCalendarView: View {
     let workDays: [WorkDay]
     @Environment(\.modelContext) private var modelContext
     
+    // Add a language preference parameter
+    var languagePreference: Int = 0
+    
     // Add callbacks for actions
     var onToggleWorkStatus: ((Date) -> Void)?
     var onOpenNoteEditor: ((Date) -> Void)?
@@ -34,6 +37,42 @@ struct CustomCalendarView: View {
     private let calendarGridHeight: CGFloat = 300
     private let dayHeight: CGFloat = 42 // Fixed height for each day
     private let rowSpacing: CGFloat = 8 // Fixed spacing between rows
+    
+    // Helper to get localized day names based on language preference
+    private var localizedWeekdaySymbols: [String] {
+        let language = AppLanguage(rawValue: languagePreference) ?? .systemDefault
+        
+        if language == .chinese {
+            return ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+        } else {
+            return Calendar.current.shortWeekdaySymbols
+        }
+    }
+    
+    // Helper to get localized month name
+    private func localizedMonthYear() -> String {
+        let language = AppLanguage(rawValue: languagePreference) ?? .systemDefault
+        
+        if language == .chinese {
+            let calendar = Calendar.current
+            let year = calendar.component(.year, from: currentMonth)
+            let month = calendar.component(.month, from: currentMonth)
+            return "\(year)年\(month)月"
+        } else {
+            return currentMonth.formatted(.dateTime.month().year())
+        }
+    }
+    
+    // Helper to determine if a date is a workday (using default rules if no explicit entry)
+    private func isWorkDay(_ date: Date) -> Bool {
+        // First check if we have an explicit entry
+        let calendar = Calendar.current
+        if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            return explicitDay.isWorkDay
+        }
+        // Fall back to default rules
+        return isDefaultWorkDay(date)
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -99,12 +138,12 @@ struct CustomCalendarView: View {
                         calendarViewMode = .months
                     }
                 }) {
-                    Text(currentMonth.formatted(.dateTime.month().year()))
+                    Text(localizedMonthYear())
                         .font(.title2)
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
                 }
-                .id("month-title-\(currentMonth.formatted(.dateTime.month().year()))")
+                .id("month-title-\(localizedMonthYear())")
                 .transition(.asymmetric(
                     insertion: slideDirection == .left ? 
                         .move(edge: .trailing).combined(with: .opacity) :
@@ -140,11 +179,16 @@ struct CustomCalendarView: View {
             
             // Year title as a separate ZStack with transition
             ZStack {
-                Text(String(Calendar.current.component(.year, from: currentMonth)))
+                // Use localized year format
+                let year = Calendar.current.component(.year, from: currentMonth)
+                let yearText = AppLanguage(rawValue: languagePreference) == .chinese ? 
+                    "\(year)年" : "\(year)"
+                
+                Text(yearText)
                     .font(.title2)
                     .fontWeight(.semibold)
                     .foregroundColor(.primary)
-                    .id("year-\(Calendar.current.component(.year, from: currentMonth))")
+                    .id("year-\(year)")
                     .transition(.asymmetric(
                         insertion: yearSlideDirection == .left ? 
                             .move(edge: .trailing).combined(with: .opacity) :
@@ -171,7 +215,7 @@ struct CustomCalendarView: View {
     // Day of week header (Sun, Mon, Tue, etc.)
     private var dayOfWeekHeader: some View {
         HStack {
-            ForEach(Calendar.current.shortWeekdaySymbols, id: \.self) { day in
+            ForEach(localizedWeekdaySymbols, id: \.self) { day in
                 Text(day)
                     .font(.caption)
                     .fontWeight(.semibold)
@@ -348,28 +392,33 @@ struct CustomCalendarView: View {
     // Original day view
     @ViewBuilder
     private func dayView(for date: Date) -> some View {
-        let isSelected = Calendar.current.isDate(date, inSameDayAs: selectedDate)
         let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
-        let dayWorkDay = getDayWorkStatus(date)
+        let isWorkDay = self.isWorkDay(date)
         let hasNote = dayHasNote(date)
         let day = Calendar.current.component(.day, from: date)
+        let circleColor = isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8)
         
         ZStack {
-            // Always show a circle with appropriate color
-            Circle()
-                .fill(dayWorkDay == true ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
-                .aspectRatio(1, contentMode: .fit)
-                .frame(width: 36, height: 36) // Fixed size for circles
-            
-            if isSelected {
+            if isToday {
+                // For today, create outlines aligned to the circle's center (half inside, half outside)
+                // Circle base - adjusted size to compensate for centered strokes
                 Circle()
-                    .stroke(Color.blue, lineWidth: 2)
-                    .aspectRatio(1, contentMode: .fit)
+                    .fill(circleColor)
                     .frame(width: 36, height: 36)
-            } else if isToday {
+                
+                // White outline - centered on path, not inside
                 Circle()
-                    .stroke(Color.gray, lineWidth: 1)
-                    .aspectRatio(1, contentMode: .fit)
+                    .stroke(Color.white, lineWidth: 4.5)
+                    .frame(width: 36, height: 36)
+                
+                // Colored outline - centered on path, not inside
+                Circle()
+                    .stroke(circleColor, lineWidth: 1.5)
+                    .frame(width: 36, height: 36)
+            } else {
+                // Regular day - standard filled circle
+                Circle()
+                    .fill(circleColor)
                     .frame(width: 36, height: 36)
             }
             
@@ -392,7 +441,7 @@ struct CustomCalendarView: View {
         }
         // Add tap gesture to toggle work status
         .onTapGesture {
-            // First select the date (for visual feedback)
+            // First select the date (for internal tracking)
             selectedDate = date
             // Then toggle the status
             onToggleWorkStatus?(date)
@@ -407,8 +456,7 @@ struct CustomCalendarView: View {
     }
     
     private func getDayWorkStatus(_ date: Date) -> Bool {
-        let calendar = Calendar.current
-        return workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) })?.isWorkDay ?? false
+        return isWorkDay(date)
     }
     
     private func dayHasNote(_ date: Date) -> Bool {

@@ -12,6 +12,40 @@ import WidgetKit
 // Constants for app group synchronization
 let appGroupID = "group.io.azhe.WorkdayQ"
 let lastUpdateKey = "lastDatabaseUpdate"
+let languagePreferenceKey = "languagePreference"
+
+// Helper to determine if a date is a workday by default
+// (Monday-Friday = workday, Saturday-Sunday = off day)
+func isDefaultWorkDay(_ date: Date) -> Bool {
+    let weekday = Calendar.current.component(.weekday, from: date)
+    // 1 = Sunday, 2 = Monday, ..., 7 = Saturday
+    return weekday >= 2 && weekday <= 6 // Monday to Friday
+}
+
+// Language options enum
+enum AppLanguage: Int, CaseIterable, Identifiable {
+    case systemDefault = 0
+    case english = 1
+    case chinese = 2
+    
+    var id: Int { rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .systemDefault: return "Default (System)"
+        case .english: return "English"
+        case .chinese: return "中文 (Chinese)"
+        }
+    }
+    
+    var localeIdentifier: String? {
+        switch self {
+        case .systemDefault: return nil
+        case .english: return "en"
+        case .chinese: return "zh-Hans"
+        }
+    }
+}
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
@@ -20,10 +54,36 @@ struct ContentView: View {
     @State private var selectedDate: Date = Date()
     @State private var showingNoteEditor = false
     @State private var noteText = ""
+    @State private var showingSettings = false
+    @AppStorage(languagePreferenceKey) private var languagePreference = 0 // Default: system
+    
+    // Add explicit app group UserDefaults access for direct writes
+    private let sharedDefaults = UserDefaults(suiteName: appGroupID)
+    
+    // Get the work status for a specific date, using stored data or default rules
+    func isWorkDay(forDate date: Date) -> Bool {
+        let calendar = Calendar.current
+        // First check if we have an explicit record
+        if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            return explicitDay.isWorkDay
+        }
+        // Fall back to default rules
+        return isDefaultWorkDay(date)
+    }
     
     var todayWorkDay: WorkDay? {
         let calendar = Calendar.current
         return workDays.first { calendar.isDate($0.date, inSameDayAs: Date()) }
+    }
+    
+    // Check if today is a workday using stored data or default rules
+    var isTodayWorkDay: Bool {
+        // If we have an explicit entry for today, use it
+        if let explicitDay = todayWorkDay {
+            return explicitDay.isWorkDay
+        }
+        // Otherwise use default rules: weekdays = work, weekends = off
+        return isDefaultWorkDay(Date())
     }
     
     var selectedWorkDay: WorkDay? {
@@ -34,7 +94,24 @@ struct ContentView: View {
     var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
         formatter.dateStyle = .full
+        formatter.locale = currentLocale()
         return formatter
+    }
+    
+    // Helper to get localized text based on current language preference
+    func localizedText(_ englishText: String, chineseText: String) -> String {
+        let language = AppLanguage(rawValue: languagePreference) ?? .systemDefault
+        
+        switch language {
+        case .english:
+            return englishText
+        case .chinese:
+            return chineseText
+        case .systemDefault:
+            // Try to detect system language
+            let preferredLanguage = Locale.current.language.languageCode?.identifier ?? "en"
+            return preferredLanguage.hasPrefix("zh") ? chineseText : englishText
+        }
     }
     
     var body: some View {
@@ -47,6 +124,7 @@ struct ContentView: View {
                 CustomCalendarView(
                     selectedDate: $selectedDate,
                     workDays: workDays,
+                    languagePreference: languagePreference,
                     onToggleWorkStatus: { date in
                         toggleWorkStatus(for: date)
                     },
@@ -66,11 +144,15 @@ struct ContentView: View {
                 // Instructions for interactions
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
-                        Label("Tap a day to toggle work/off status", systemImage: "hand.tap")
+                        Label(localizedText("Tap a day to toggle work/off status", 
+                                           chineseText: "点击日期切换工作/休息状态"), 
+                              systemImage: "hand.tap")
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
-                        Label("Long-press to add or edit notes", systemImage: "hand.tap.fill")
+                        Label(localizedText("Long-press to add or edit notes", 
+                                           chineseText: "长按添加或编辑备注"), 
+                              systemImage: "hand.tap.fill")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -81,14 +163,47 @@ struct ContentView: View {
                 Spacer()
             }
             .padding()
-            .navigationTitle("WorkdayQ")
+            .toolbar(.hidden, for: .navigationBar) // Hide default navigation bar
+            .safeAreaInset(edge: .top) {
+                HStack {
+                    Text(localizedText("WorkdayQ", chineseText: "今天上班吗？"))
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        showingSettings = true
+                    }) {
+                        Image(systemName: "gear")
+                            .font(.title2)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
+                .background(Color(UIColor.systemBackground))
+            }
             .sheet(isPresented: $showingNoteEditor) {
                 noteEditorView
+            }
+            .sheet(isPresented: $showingSettings) {
+                settingsView
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             }
             .onAppear {
                 checkAndCreateTodayEntry()
                 // Always reload widget when view appears
                 reloadWidgets()
+                // Make sure shared defaults has the current language preference
+                syncLanguagePreference()
+            }
+            .onChange(of: languagePreference) { oldValue, newValue in
+                // When language changes, sync it immediately and reload widgets
+                print("Language preference changed from \(oldValue) to \(newValue)")
+                syncLanguagePreference()
+                reloadWidgets() // Force widgets to refresh
             }
             .onChange(of: workDays) { _, _ in
                 // Reload widgets when workdays change 
@@ -98,26 +213,47 @@ struct ContentView: View {
     }
     
     var todayStatusCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(dateFormatter.string(from: Date()))
                 .font(.headline)
+                .padding(.bottom, 4)
             
-            Text("Today is:")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            // Show "Today is:" or "今天" based on language
+            if languagePreference == AppLanguage.chinese.rawValue {
+                Text("今天")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+                    .padding(.bottom, -4)
+            } else {
+                Text(localizedText("Today is:", chineseText: "今天是:"))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
             
             HStack {
-                let isWorkDay = todayWorkDay?.isWorkDay ?? false
-                Text(isWorkDay ? "Workday" : "Off day")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(isWorkDay ? .red : .green)
+                let isWorkDay = isTodayWorkDay
+                
+                // Use different text format for Chinese
+                if languagePreference == AppLanguage.chinese.rawValue {
+                    Text(isWorkDay ? "要上班" : "不上班")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(isWorkDay ? .red : .green)
+                        .padding(.top, -3)
+                } else {
+                    Text(isWorkDay ? 
+                         localizedText("Workday", chineseText: "工作日") : 
+                         localizedText("Off day", chineseText: "休息日"))
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(isWorkDay ? .red : .green)
+                }
                 
                 Spacer()
                 
                 Circle()
                     .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
-                    .frame(width: 30, height: 30)
+                    .frame(width: 50, height: 50)
             }
             
             if let note = todayWorkDay?.note, !note.isEmpty {
@@ -125,11 +261,15 @@ struct ContentView: View {
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .lineLimit(2)
+                    .padding(.top, 4)
             }
         }
-        .padding()
+        .padding(.horizontal, 28)
+        .padding(.vertical, 16)
+        .frame(height: 155)
+        .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 20) // iOS widget corner radius
                 .fill(Color(UIColor.systemBackground))
                 .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
         )
@@ -138,7 +278,9 @@ struct ContentView: View {
     var noteEditorView: some View {
         NavigationStack {
             VStack {
-                TextField("Enter note for \(dateFormatter.string(from: selectedDate))", text: $noteText, axis: .vertical)
+                TextField(localizedText("Enter note for \(dateFormatter.string(from: selectedDate))",
+                                       chineseText: "为 \(dateFormatter.string(from: selectedDate)) 添加备注"), 
+                          text: $noteText, axis: .vertical)
                     .padding()
                     .textFieldStyle(.roundedBorder)
                     .lineLimit(5...10)
@@ -146,16 +288,16 @@ struct ContentView: View {
                 Spacer()
             }
             .padding()
-            .navigationTitle("Date Note")
+            .navigationTitle(localizedText("Date Note", chineseText: "日期备注"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
+                    Button(localizedText("Cancel", chineseText: "取消")) {
                         showingNoteEditor = false
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button(localizedText("Save", chineseText: "保存")) {
                         saveNote()
                         showingNoteEditor = false
                     }
@@ -169,13 +311,23 @@ struct ContentView: View {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         
+        // Only create an entry for today if one doesn't exist AND it would differ from the default
+        // No need to create an entry if it would just use the default status
+        let defaultStatus = isDefaultWorkDay(today)
+        
+        // If today doesn't have an entry yet, we'll create one ONLY if we need to override the default
+        // This is now just a placeholder for future manual toggle, but we won't set it different from default
         if !workDays.contains(where: { calendar.isDate($0.date, inSameDayAs: today) }) {
-            let newWorkDay = WorkDay(date: today)
+            let newWorkDay = WorkDay(date: today, isWorkDay: defaultStatus)
             modelContext.insert(newWorkDay)
             
-            // Save data and notify widget
-            try? modelContext.save()
-            notifyWidgetDataChanged()
+            // Save data and notify widget with better error handling
+            do {
+                try modelContext.save()
+                notifyWidgetDataChanged()
+            } catch {
+                print("Error saving today's entry: \(error.localizedDescription)")
+            }
         }
     }
     
@@ -183,38 +335,121 @@ struct ContentView: View {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: date)
         
+        // Check the default status for this date
+        let defaultStatus = isDefaultWorkDay(dayStart)
+        
+        // If an entry already exists, toggle its status
         if let existingDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: dayStart) }) {
+            // Toggle the work status
             existingDay.isWorkDay.toggle()
+            
+            // If the toggled status now matches the default, we can delete this record
+            if existingDay.isWorkDay == defaultStatus && (existingDay.note == nil || existingDay.note!.isEmpty) {
+                modelContext.delete(existingDay)
+            }
         } else {
-            let newWorkDay = WorkDay(date: dayStart, isWorkDay: true)
+            // No entry exists - create a new one only if it would differ from default
+            // The new status would be the opposite of the default
+            let newStatus = !defaultStatus
+            let newWorkDay = WorkDay(date: dayStart, isWorkDay: newStatus)
             modelContext.insert(newWorkDay)
         }
         
-        // Save data and notify widget
-        try? modelContext.save()
-        notifyWidgetDataChanged()
+        // Save data and notify widget with better error handling
+        do {
+            try modelContext.save()
+            notifyWidgetDataChanged()
+        } catch {
+            print("Error saving work status change: \(error.localizedDescription)")
+        }
     }
     
     private func saveNote() {
         let calendar = Calendar.current
         let selectedDayStart = calendar.startOfDay(for: selectedDate)
         
+        // Check the default status for this date
+        let defaultStatus = isDefaultWorkDay(selectedDayStart)
+        
         if let existingDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: selectedDayStart) }) {
+            // Update existing entry with the new note
             existingDay.note = noteText.isEmpty ? nil : noteText
+            
+            // If the status matches default and there's no note, we can delete this record
+            if existingDay.isWorkDay == defaultStatus && (existingDay.note == nil || existingDay.note!.isEmpty) {
+                modelContext.delete(existingDay)
+            }
         } else {
-            let newWorkDay = WorkDay(date: selectedDayStart, note: noteText.isEmpty ? nil : noteText)
-            modelContext.insert(newWorkDay)
+            // Only create a new entry if there is a note to add (since status would be default)
+            if !noteText.isEmpty {
+                let newWorkDay = WorkDay(date: selectedDayStart, isWorkDay: defaultStatus, note: noteText)
+                modelContext.insert(newWorkDay)
+            }
         }
         
-        // Save data and notify widget
-        try? modelContext.save()
-        notifyWidgetDataChanged()
+        // Save data and notify widget with better error handling
+        do {
+            try modelContext.save()
+            notifyWidgetDataChanged()
+        } catch {
+            print("Error saving note: \(error.localizedDescription)")
+        }
     }
     
     // Force reload of all widgets
     private func reloadWidgets() {
-        print("Reloading all widget timelines")
+        // First, update the timestamp in UserDefaults to signal change
+        if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+            let timestamp = Date().timeIntervalSince1970
+            sharedDefaults.set(timestamp, forKey: lastUpdateKey)
+            
+            // Make sure language preference is also synced
+            sharedDefaults.set(languagePreference, forKey: languagePreferenceKey)
+            
+            // Force write
+            sharedDefaults.synchronize()
+            
+            // Cache the work days data for widget fallback access
+            cacheWorkDaysToUserDefaults(workDays)
+        }
+        
+        // Tell WidgetKit to reload
         WidgetCenter.shared.reloadAllTimelines()
+    }
+    
+    // Cache work days to UserDefaults for widget fallback access
+    private func cacheWorkDaysToUserDefaults(_ workDays: [WorkDay]) {
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupID) else {
+            print("Failed to access shared UserDefaults")
+            return
+        }
+        
+        // Convert WorkDay models to dictionaries
+        let workDayDicts = workDays.map { workDay -> [String: Any] in
+            var dict: [String: Any] = [
+                "date": workDay.date,
+                "isWorkDay": workDay.isWorkDay
+            ]
+            
+            if let note = workDay.note {
+                dict["note"] = note
+            }
+            
+            return dict
+        }
+        
+        do {
+            // Serialize and save the data
+            let data = try NSKeyedArchiver.archivedData(
+                withRootObject: workDayDicts,
+                requiringSecureCoding: false
+            )
+            
+            sharedDefaults.set(data, forKey: "cachedWorkDays")
+            print("Cached \(workDays.count) work days to UserDefaults for widget access")
+        } catch {
+            print("Error caching work days to UserDefaults: \(error)")
+        }
     }
     
     // Notify widgets of data changes via UserDefaults
@@ -226,6 +461,111 @@ struct ContentView: View {
         
         // Also trigger immediate reload
         reloadWidgets()
+    }
+    
+    // Settings view that appears from bottom
+    var settingsView: some View {
+        NavigationStack {
+            List {
+                Section(header: Text(localizedText("Language", chineseText: "语言"))) {
+                    Picker(localizedText("App Language", chineseText: "应用语言"), selection: $languagePreference) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(language.displayName).tag(language.rawValue)
+                        }
+                    }
+                    .onChange(of: languagePreference) { oldValue, newValue in
+                        if oldValue != newValue {
+                            // Show alert about needing to restart
+                            // In a real implementation, we might actually restart the app
+                            // or apply the language change immediately
+                            print("Language changed to: \(AppLanguage(rawValue: newValue)?.displayName ?? "Unknown")")
+                            // Ensure we sync this change to the shared UserDefaults
+                            syncLanguagePreference()
+                            // Force widgets to reload
+                            reloadWidgets()
+                        }
+                    }
+                    
+                    if languagePreference != AppLanguage.systemDefault.rawValue {
+                        Button(localizedText("Reset to System Default", chineseText: "重置为系统默认设置")) {
+                            languagePreference = AppLanguage.systemDefault.rawValue
+                        }
+                        .foregroundColor(.blue)
+                    }
+                }
+                
+                Section(header: Text(localizedText("Appearance", chineseText: "外观"))) {
+                    Toggle(localizedText("Dark Mode", chineseText: "深色模式"), isOn: .constant(false))
+                        .disabled(true) // Placeholder for future implementation
+                    
+                    Picker(localizedText("Start of Week", chineseText: "每周开始日"), selection: .constant(0)) {
+                        Text(localizedText("Sunday", chineseText: "周日")).tag(0)
+                        Text(localizedText("Monday", chineseText: "周一")).tag(1)
+                    }
+                    .disabled(true) // Placeholder for future implementation
+                }
+                
+                Section(header: Text(localizedText("Data", chineseText: "数据"))) {
+                    Button(action: {
+                        // Placeholder for backup functionality
+                    }) {
+                        Label(localizedText("Backup Data", chineseText: "备份数据"), systemImage: "arrow.down.doc")
+                    }
+                    
+                    Button(action: {
+                        // Placeholder for restore functionality
+                    }) {
+                        Label(localizedText("Restore Data", chineseText: "恢复数据"), systemImage: "arrow.up.doc")
+                    }
+                }
+                
+                Section(header: Text(localizedText("About", chineseText: "关于"))) {
+                    HStack {
+                        Text(localizedText("Version", chineseText: "版本"))
+                        Spacer()
+                        Text("1.0.0")
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Link(destination: URL(string: "https://example.com/privacy")!) {
+                        Label(localizedText("Privacy Policy", chineseText: "隐私政策"), systemImage: "lock.shield")
+                    }
+                }
+            }
+            .navigationTitle(localizedText("Settings", chineseText: "设置"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(localizedText("Done", chineseText: "完成")) {
+                        showingSettings = false
+                    }
+                }
+            }
+        }
+    }
+    
+    // Function to get current locale based on language preference
+    func currentLocale() -> Locale {
+        let language = AppLanguage(rawValue: languagePreference) ?? .systemDefault
+        if let localeID = language.localeIdentifier {
+            return Locale(identifier: localeID)
+        } else {
+            return Locale.current
+        }
+    }
+    
+    // New function to explicitly synchronize language preference to shared UserDefaults
+    private func syncLanguagePreference() {
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupID) else {
+            print("Failed to access shared UserDefaults")
+            return
+        }
+        
+        // Set the language preference in shared UserDefaults
+        sharedDefaults.set(languagePreference, forKey: languagePreferenceKey)
+        sharedDefaults.synchronize() // Force immediate write
+        
+        print("Synced language preference to UserDefaults: \(languagePreference)")
     }
 }
 

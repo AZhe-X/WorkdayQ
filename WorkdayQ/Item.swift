@@ -10,7 +10,7 @@ import SwiftData
 
 @Model
 final class WorkDay {
-    var date: Date
+    @Attribute(.unique) var date: Date
     var isWorkDay: Bool
     var note: String?
     

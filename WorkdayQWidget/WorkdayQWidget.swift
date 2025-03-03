@@ -12,6 +12,38 @@ import SwiftData
 // Constants shared with app
 let appGroupID = "group.io.azhe.WorkdayQ"
 let lastUpdateKey = "lastDatabaseUpdate"
+let languagePreferenceKey = "languagePreference" // Add language preference key
+
+// Helper to determine if a date is a workday by default
+// (Monday-Friday = workday, Saturday-Sunday = off day)
+func isDefaultWorkDay(_ date: Date) -> Bool {
+    let weekday = Calendar.current.component(.weekday, from: date)
+    // 1 = Sunday, 2 = Monday, ..., 7 = Saturday
+    return weekday >= 2 && weekday <= 6 // Monday to Friday
+}
+
+// Language options enum (duplicated from main app)
+enum AppLanguage: Int, CaseIterable {
+    case systemDefault = 0
+    case english = 1
+    case chinese = 2
+    
+    // Helper to determine if we should use Chinese
+    static func shouldUseChineseText(_ preferenceValue: Int) -> Bool {
+        let language = AppLanguage(rawValue: preferenceValue) ?? .systemDefault
+        
+        switch language {
+        case .english:
+            return false
+        case .chinese:
+            return true
+        case .systemDefault:
+            // Try to detect system language
+            let preferredLanguage = Locale.current.language.languageCode?.identifier ?? "en"
+            return preferredLanguage.hasPrefix("zh")
+        }
+    }
+}
 
 struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> DayEntry {
@@ -29,6 +61,10 @@ struct Provider: TimelineProvider {
             // Get last update timestamp from shared UserDefaults
             let sharedDefaults = UserDefaults(suiteName: appGroupID)
             let lastUpdate = sharedDefaults?.double(forKey: lastUpdateKey) ?? 0
+            
+            // DEBUG: Check language preference
+            let langPref = sharedDefaults?.integer(forKey: languagePreferenceKey) ?? 0
+            print("Provider timeline checking language preference: \(langPref)")
             print("Widget checking for updates, last update: \(Date(timeIntervalSince1970: lastUpdate))")
             
             // Get the current date normalized to start of day for consistency
@@ -165,7 +201,7 @@ struct Provider: TimelineProvider {
             switch context.family {
             case .systemSmall, .systemMedium:
                 // Use shorter refresh for visible widgets
-                refreshInterval = context.isPreview ? 3600 : 300 // 5 minutes for real widgets, 1 hour for previews
+                refreshInterval = context.isPreview ? 3600 : 60 // 1 minute for real widgets for faster updates, 1 hour for previews
             default:
                 // Default to 15 minutes for other cases
                 refreshInterval = 900
@@ -191,19 +227,47 @@ struct DayEntry: TimelineEntry {
         return workDays.first { calendar.isDate($0.date, inSameDayAs: date) }
     }
     
+    // Get the work status for today with default rules
+    var isTodayWorkDay: Bool {
+        // If we have an explicit entry for today, use it
+        if let explicitDay = todayWorkDay {
+            return explicitDay.isWorkDay
+        }
+        // Otherwise use default rules: weekdays = work, weekends = off
+        return isDefaultWorkDay(date)
+    }
+    
     // Returns the work status for a day offset from today
-    // If no record exists, returns null but the display code should treat it as false (off day)
+    // If no record exists, use default rules (Mon-Fri = work, Sat-Sun = off)
     func workDayForOffset(_ offset: Int) -> WorkDayStruct? {
         let calendar = Calendar.current
         guard let targetDate = calendar.date(byAdding: .day, value: offset, to: date) else {
             return nil
         }
         
+        // Look for an explicit entry first
         let result = workDays.first { calendar.isDate($0.date, inSameDayAs: targetDate) }
+        
         if offset <= 1 {  // Log for debugging today and tomorrow
-            print("Looking for day at offset \(offset): \(targetDate), found: \(result?.isWorkDay ?? false)")
+            if let explicitDay = result {
+                print("Looking for day at offset \(offset): \(targetDate), found explicit record: \(explicitDay.isWorkDay)")
+            } else {
+                let defaultStatus = isDefaultWorkDay(targetDate)
+                print("Looking for day at offset \(offset): \(targetDate), using default status: \(defaultStatus)")
+            }
         }
         return result
+    }
+    
+    // Check if a specific date is a workday, using stored data or default rules
+    func isWorkDay(forDate date: Date) -> Bool {
+        let calendar = Calendar.current
+        // First check if we have an explicit record
+        if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            return explicitDay.isWorkDay
+        }
+        // Fall back to default rules
+        return isDefaultWorkDay(date)
     }
 }
 
@@ -228,60 +292,99 @@ struct WorkdayQWidgetEntryView: View {
     }
 }
 
+// Ensure views are accessible to the Widget
 struct TodayWidgetView: View {
     var entry: Provider.Entry
+    // Use direct UserDefaults access with a non-optional default
+    private let userDefaults = UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
     
     var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
+        
+        // Try to respect the language preference for date format
+        let langPref = userDefaults.integer(forKey: languagePreferenceKey)
+        if AppLanguage.shouldUseChineseText(langPref) {
+            formatter.locale = Locale(identifier: "zh-Hans")
+        }
+        
         return formatter
     }
     
     var body: some View {
-        ZStack {
-            // Use white background for consistency with other widgets
+        // Debug the language preference directly from UserDefaults
+        let langPref = userDefaults.integer(forKey: languagePreferenceKey)
+        let useChineseText = AppLanguage.shouldUseChineseText(langPref)
+        
+        // Debug output - this will appear in the console when widget updates
+        print("Widget language preference: \(langPref), useChineseText: \(useChineseText)")
+        
+        return ZStack {
+            // Use system background for consistency with the app
             Rectangle()
-                .fill(Color.white)
+                .fill(Color(UIColor.systemBackground))
                 .edgesIgnoringSafeArea(.all)
             
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(dateFormatter.string(from: entry.date))
                     .font(.headline)
-                    .foregroundColor(.secondary)
+                    .padding(.bottom, 4)
                 
-                Spacer()
+                // Use Chinese format or English format based on language preference
+                if useChineseText {
+                    Text("今天")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                        .padding(.bottom, -4)
+                } else {
+                    Text("Today is:")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        // Remove padding to match app styling
+                }
                 
                 HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Today is")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        
-                        let isWorkDay = entry.todayWorkDay?.isWorkDay ?? false
-                        Text(isWorkDay ? "Workday" : "Off day")
-                            .font(.system(size: 24, weight: .bold))
+                    let isWorkDay = entry.isTodayWorkDay
+                    
+                    // Use different text format for Chinese
+                    if useChineseText {
+                        Text(isWorkDay ? "要上班" : "不上班")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
                             .foregroundColor(isWorkDay ? .red : .green)
-                            .minimumScaleFactor(0.6)
+                            .padding(.top, -3)
+                    } else {
+                        Text(isWorkDay ? "Workday" : "Off day")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(isWorkDay ? .red : .green)
+                            // Remove minimumScaleFactor to match app styling
                     }
                     
                     Spacer()
                     
-                    // Match the circle size with other widgets for consistency
+                    // Match the circle size with the main app
                     Circle()
-                        .fill(entry.todayWorkDay?.isWorkDay ?? false ? Color.red : Color.green)
-                        .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
-                        .frame(width: 44, height: 44)
+                        .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
+                        .frame(width: 50, height: 50)
                 }
                 
                 if let note = entry.todayWorkDay?.note, !note.isEmpty {
                     Text(note)
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundColor(.secondary)
-                        .lineLimit(1)
-                        .padding(.top, 2)
+                        .lineLimit(2)
+                        .padding(.top, 4)
                 }
             }
-            .padding()
+            .padding(.horizontal, 10)
+            .padding(.vertical, 16)
+            .frame(height: 155)
+            .frame(maxWidth: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color(UIColor.systemBackground))
+            )
         }
     }
 }
@@ -289,10 +392,18 @@ struct TodayWidgetView: View {
 struct WeekWidgetView: View {
     var entry: DayEntry
     @Environment(\.widgetFamily) var family
+    // Use direct UserDefaults access with a non-optional default
+    private let userDefaults = UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
     
     var body: some View {
-        // Fill the entire widget with a white background
-        ZStack {
+        // Debug the language preference directly from UserDefaults
+        let langPref = userDefaults.integer(forKey: languagePreferenceKey)
+        let useChineseText = AppLanguage.shouldUseChineseText(langPref)
+        
+        // Debug output
+        print("Week widget language preference: \(langPref), useChineseText: \(useChineseText)")
+        
+        return ZStack {
             Rectangle()
                 .fill(Color.white)
                 .edgesIgnoringSafeArea(.all)
@@ -303,7 +414,7 @@ struct WeekWidgetView: View {
                 HStack(alignment: .bottom, spacing: 0) {
                     // Today and the next 6 days
                     ForEach(0...6, id: \.self) { offset in
-                        dayView(for: offset, isLarge: offset <= 1) // Make today and tomorrow larger
+                        dayView(offset: offset, isLarge: offset <= 1, useChineseText: useChineseText)
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -313,23 +424,37 @@ struct WeekWidgetView: View {
         }
     }
     
-    @ViewBuilder
-    func dayView(for offset: Int, isLarge: Bool) -> some View {
+    // Changed function signature to use named parameters
+    private func dayView(offset: Int, isLarge: Bool, useChineseText: Bool) -> some View {
         let calendar = Calendar.current
         
         // Use the entry's date (which is start of day) for consistency
         let date = calendar.date(byAdding: .day, value: offset, to: entry.date) ?? entry.date
-        let workDay = entry.workDayForOffset(offset)
-        let isWorkDay = workDay?.isWorkDay ?? false
+        
+        // Use the new isWorkDay method
+        let isWorkDay = entry.isWorkDay(forDate: date)
         
         let dayOfWeek = calendar.component(.weekday, from: date)
-        // Use "Today" for offset 0 and day name for other days
-        let dayName = offset == 0 ? "Today" : calendar.shortWeekdaySymbols[dayOfWeek - 1]
+        
+        // Use localized day names based on language preference
+        let dayName: String
+        if offset == 0 {
+            dayName = useChineseText ? "今天" : "Today"
+        } else {
+            // For other days use short weekday symbols
+            if useChineseText {
+                let chineseWeekdaySymbols = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+                dayName = chineseWeekdaySymbols[dayOfWeek - 1]
+            } else {
+                dayName = calendar.shortWeekdaySymbols[dayOfWeek - 1]
+            }
+        }
+        
         let dayNum = calendar.component(.day, from: date)
         
         let isToday = offset == 0
         
-        VStack(spacing: 4) {
+        return VStack(spacing: 4) {
             Text(dayName)
                 .font(.system(size: isLarge ? 13 : 10))
                 .fontWeight(.medium)
@@ -366,9 +491,18 @@ struct WeekWidgetView: View {
 // New view for small widget with only today and tomorrow
 struct SmallWeekWidgetView: View {
     var entry: DayEntry
+    // Use direct UserDefaults access with a non-optional default
+    private let userDefaults = UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
     
     var body: some View {
-        ZStack {
+        // Debug the language preference directly
+        let langPref = userDefaults.integer(forKey: languagePreferenceKey)
+        let useChineseText = AppLanguage.shouldUseChineseText(langPref)
+        
+        // Debug output
+        print("Small week widget language preference: \(langPref), useChineseText: \(useChineseText)")
+        
+        return ZStack {
             Rectangle()
                 .fill(Color.white)
                 .edgesIgnoringSafeArea(.all)
@@ -379,7 +513,7 @@ struct SmallWeekWidgetView: View {
                 HStack(alignment: .bottom, spacing: 4) {
                     // Today and tomorrow only
                     ForEach(0...1, id: \.self) { offset in
-                        dayView(for: offset)
+                        dayView(offset: offset, useChineseText: useChineseText)
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -389,22 +523,29 @@ struct SmallWeekWidgetView: View {
         }
     }
     
-    @ViewBuilder
-    func dayView(for offset: Int) -> some View {
+    // Changed function signature to use named parameters
+    private func dayView(offset: Int, useChineseText: Bool) -> some View {
         let calendar = Calendar.current
         
         // Use the entry's date (which is start of day) for consistency
         let date = calendar.date(byAdding: .day, value: offset, to: entry.date) ?? entry.date
-        let workDay = entry.workDayForOffset(offset)
-        let isWorkDay = workDay?.isWorkDay ?? false
         
-        // Use "Today" and "Tomorrow" for clarity
-        let dayName = offset == 0 ? "Today" : "Tomorrow"
+        // Use the new isWorkDay method
+        let isWorkDay = entry.isWorkDay(forDate: date)
+        
+        // Use "Today" and "Tomorrow" for clarity - respect language
+        let dayName: String
+        if useChineseText {
+            dayName = offset == 0 ? "今天" : "明天"
+        } else {
+            dayName = offset == 0 ? "Today" : "Tomorrow"
+        }
+        
         let dayNum = calendar.component(.day, from: date)
         
         let isToday = offset == 0
         
-        VStack(spacing: 8) {
+        return VStack(spacing: 8) {
             Text(dayName)
                 .font(.system(size: 14))
                 .fontWeight(.medium)

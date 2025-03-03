@@ -10,6 +10,11 @@ import SwiftUI
 
 @main
 struct WorkdayQWidgetBundle: WidgetBundle {
+    init() {
+        // Initialize any resources needed for the widget
+        print("WorkdayQWidgetBundle initializing...")
+    }
+    
     var body: some Widget {
         TodayStatusWidget()
         WeekOverviewWidget()
