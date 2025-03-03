@@ -14,6 +14,7 @@ let appGroupID = "group.io.azhe.WorkdayQ"
 let lastUpdateKey = "lastDatabaseUpdate"
 let languagePreferenceKey = "languagePreference" // Add language preference key
 let customWorkTermKey = "customWorkTerm" // Add custom work term key
+let appearancePreferenceKey = "appearancePreference" // Add appearance preference key
 
 // Helper to determine if a date is a workday by default
 // (Monday-Friday = workday, Saturday-Sunday = off day)
@@ -46,6 +47,25 @@ enum AppLanguage: Int, CaseIterable {
     }
 }
 
+// Add AppAppearance enum to help with ColorScheme conversion
+enum AppAppearance: Int, CaseIterable {
+    case systemDefault = 0
+    case light = 1
+    case dark = 2
+    
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .systemDefault: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+    
+    static func colorSchemeFromPreference(_ preferenceValue: Int) -> ColorScheme? {
+        return AppAppearance(rawValue: preferenceValue)?.colorScheme
+    }
+}
+
 struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> DayEntry {
         DayEntry(date: Date(), workDays: [], lastUpdateTime: 0)
@@ -62,6 +82,10 @@ struct Provider: TimelineProvider {
             // Get last update timestamp from shared UserDefaults
             let sharedDefaults = UserDefaults(suiteName: appGroupID)
             let lastUpdate = sharedDefaults?.double(forKey: lastUpdateKey) ?? 0
+            
+            // Get appearance preference
+            let appearancePref = sharedDefaults?.integer(forKey: appearancePreferenceKey) ?? 0
+            let preferredColorScheme = AppAppearance.colorSchemeFromPreference(appearancePref)
             
             // DEBUG: Check language preference
             let langPref = sharedDefaults?.integer(forKey: languagePreferenceKey) ?? 0
@@ -195,7 +219,12 @@ struct Provider: TimelineProvider {
             }
             
             // Create a timeline entry for now - use the normalized date
-            let entry = DayEntry(date: currentDate, workDays: workDays, lastUpdateTime: lastUpdate)
+            let entry = DayEntry(
+                date: currentDate, 
+                workDays: workDays, 
+                lastUpdateTime: lastUpdate,
+                preferredColorScheme: preferredColorScheme
+            )
             
             // Update refresh strategy based on context
             let refreshInterval: TimeInterval
@@ -222,6 +251,15 @@ struct DayEntry: TimelineEntry {
     let date: Date  // This should always be start of day
     let workDays: [WorkDayStruct]
     let lastUpdateTime: TimeInterval  // Track when data was last updated
+    let preferredColorScheme: ColorScheme?
+    
+    // Use initializer with default parameters
+    init(date: Date, workDays: [WorkDayStruct], lastUpdateTime: TimeInterval, preferredColorScheme: ColorScheme? = nil) {
+        self.date = date
+        self.workDays = workDays
+        self.lastUpdateTime = lastUpdateTime
+        self.preferredColorScheme = preferredColorScheme
+    }
     
     var todayWorkDay: WorkDayStruct? {
         let calendar = Calendar.current
@@ -274,6 +312,7 @@ struct DayEntry: TimelineEntry {
 
 struct WorkdayQWidgetEntryView: View {
     @Environment(\.widgetFamily) var family
+    @Environment(\.colorScheme) var colorScheme
     var entry: Provider.Entry
     
     var body: some View {
@@ -296,6 +335,7 @@ struct WorkdayQWidgetEntryView: View {
 // Ensure views are accessible to the Widget
 struct TodayWidgetView: View {
     var entry: Provider.Entry
+    @Environment(\.colorScheme) var colorScheme
     // Use direct UserDefaults access with a non-optional default
     private let userDefaults = UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
     
@@ -333,73 +373,73 @@ struct TodayWidgetView: View {
         // Debug output - this will appear in the console when widget updates
         print("Widget language preference: \(langPref), useChineseText: \(useChineseText)")
         print("Widget custom work term: \(customWorkTerm)")
+        print("TodayWidgetView detected colorScheme: \(colorScheme == .dark ? "dark" : "light")")
         
-        return ZStack {
-            // Use system background for consistency with the app
-            Rectangle()
-                .fill(Color(UIColor.systemBackground))
-                .edgesIgnoringSafeArea(.all)
+        return VStack(alignment: .leading, spacing: 4) {
+            Text(dateFormatter.string(from: entry.date))
+                .font(.headline)
+                .padding(.bottom, 4)
             
-            VStack(alignment: .leading, spacing: 4) {
-                Text(dateFormatter.string(from: entry.date))
-                    .font(.headline)
-                    .padding(.bottom, 4)
-                
-                // Use Chinese format or English format based on language preference
-                if useChineseText {
-                    Text("今天")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
-                        .padding(.bottom, -4)
-                } else {
-                    Text("Today is:")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        // Remove padding to match app styling
-                }
-                
-                HStack {
-                    let isWorkDay = entry.isTodayWorkDay
-                    
-                    // Use different text format for Chinese
-                    if useChineseText {
-                        Text(customizeWorkTerm(isWorkDay ? "要上班" : "不上班"))
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundColor(isWorkDay ? .red : .green)
-                            .padding(.top, -3)
-                    } else {
-                        Text(isWorkDay ? "Workday" : "Off day")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(isWorkDay ? .red : .green)
-                            // Remove minimumScaleFactor to match app styling
-                    }
-                    
-                    Spacer()
-                    
-                    // Match the circle size with the main app
-                    Circle()
-                        .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
-                        .frame(width: 50, height: 50)
-                }
-                
-                if let note = entry.todayWorkDay?.note, !note.isEmpty {
-                    Text(note)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                        .padding(.top, 4)
-                }
+            // Use Chinese format or English format based on language preference
+            if useChineseText {
+                Text("今天")
+                    .font(.title3)
+                    .foregroundColor(.secondary)
+                    .padding(.bottom, -4)
+            } else {
+                Text("Today is:")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    // Remove padding to match app styling
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 16)
-            .frame(height: 155)
-            .frame(maxWidth: .infinity)
-            .background(
+            
+            HStack {
+                let isWorkDay = entry.isTodayWorkDay
+                
+                // Use different text format for Chinese
+                if useChineseText {
+                    Text(customizeWorkTerm(isWorkDay ? "要上班" : "不上班"))
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(isWorkDay ? .red : .green)
+                        .padding(.top, -3)
+                } else {
+                    Text(isWorkDay ? "Workday" : "Off day")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(isWorkDay ? .red : .green)
+                        // Remove minimumScaleFactor to match app styling
+                }
+                
+                Spacer()
+                
+                // Match the circle size with the main app
+                Circle()
+                    .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
+                    .frame(width: 50, height: 50)
+            }
+            
+            if let note = entry.todayWorkDay?.note, !note.isEmpty {
+                Text(note)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+                    .padding(.top, 4)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 16)
+        .frame(height: 155)
+        .frame(maxWidth: .infinity)
+        .containerBackground(for: .widget) {
+            // Use direct color scheme detection for the background
+            if colorScheme == .dark {
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(UIColor.systemBackground))
-            )
+                    .fill(Color.black)
+            } else {
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color.white)
+            }
         }
     }
 }
@@ -407,6 +447,7 @@ struct TodayWidgetView: View {
 struct WeekWidgetView: View {
     var entry: DayEntry
     @Environment(\.widgetFamily) var family
+    @Environment(\.colorScheme) var colorScheme
     // Use direct UserDefaults access with a non-optional default
     private let userDefaults = UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
     
@@ -431,36 +472,39 @@ struct WeekWidgetView: View {
         // Debug output
         print("Week widget language preference: \(langPref), useChineseText: \(useChineseText)")
         print("Week widget custom work term: \(customWorkTerm)")
+        print("WeekWidgetView detected colorScheme: \(colorScheme == .dark ? "dark" : "light")")
         
-        return ZStack {
-            Rectangle()
-                .fill(Color.white)
-                .edgesIgnoringSafeArea(.all)
+        return VStack(spacing: 0) {
+            // Add the title at the top - only show in Chinese
+            if useChineseText {
+                Text(customizeWorkTerm("这几天上班吗？"))
+                    .font(.headline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary) // Make text gray
+                    .frame(maxWidth: .infinity, alignment: .leading) // Align to left
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                    .padding(.leading, 10) // Add left padding
+            }
             
-            VStack(spacing: 0) {
-                // Add the title at the top - only show in Chinese
-                if useChineseText {
-                    Text(customizeWorkTerm("这几天上班吗？"))
-                        .font(.headline)
-                        .fontWeight(.medium)
-                        .foregroundColor(.secondary) // Make text gray
-                        .frame(maxWidth: .infinity, alignment: .leading) // Align to left
-                        .padding(.top, 8)
-                        .padding(.bottom, 4)
-                        .padding(.leading, 10) // Add left padding
+            Spacer() // Push content to bottom
+            
+            HStack(alignment: .bottom, spacing: 0) {
+                // Today and the next 6 days
+                ForEach(0...6, id: \.self) { offset in
+                    dayView(offset: offset, isLarge: offset <= 1, useChineseText: useChineseText)
+                        .frame(maxWidth: .infinity)
                 }
-                
-                Spacer() // Push content to bottom
-                
-                HStack(alignment: .bottom, spacing: 0) {
-                    // Today and the next 6 days
-                    ForEach(0...6, id: \.self) { offset in
-                        dayView(offset: offset, isLarge: offset <= 1, useChineseText: useChineseText)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .padding(.horizontal, 8)
-                .padding(.bottom, 10)
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 10)
+        }
+        .containerBackground(for: .widget) {
+            // Use direct color scheme detection for the background
+            if colorScheme == .dark {
+                Color.black
+            } else {
+                Color.white
             }
         }
     }
@@ -532,6 +576,7 @@ struct WeekWidgetView: View {
 // New view for small widget with only today and tomorrow
 struct SmallWeekWidgetView: View {
     var entry: DayEntry
+    @Environment(\.colorScheme) var colorScheme
     // Use direct UserDefaults access with a non-optional default
     private let userDefaults = UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
     
@@ -556,36 +601,39 @@ struct SmallWeekWidgetView: View {
         // Debug output
         print("Small week widget language preference: \(langPref), useChineseText: \(useChineseText)")
         print("Small week widget custom work term: \(customWorkTerm)")
+        print("SmallWeekWidgetView detected colorScheme: \(colorScheme == .dark ? "dark" : "light")")
         
-        return ZStack {
-            Rectangle()
-                .fill(Color.white)
-                .edgesIgnoringSafeArea(.all)
+        return VStack(spacing: 0) {
+            // Add the title at the top - only show in Chinese
+            if useChineseText {
+                Text(customizeWorkTerm("这几天上班吗？"))
+                    .font(.headline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary) // Make text gray
+                    .frame(maxWidth: .infinity, alignment: .leading) // Align to left
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                    .padding(.leading, 10) // Add left padding
+            }
             
-            VStack(spacing: 0) {
-                // Add the title at the top - only show in Chinese
-                if useChineseText {
-                    Text(customizeWorkTerm("这几天上班吗？"))
-                        .font(.headline)
-                        .fontWeight(.medium)
-                        .foregroundColor(.secondary) // Make text gray
-                        .frame(maxWidth: .infinity, alignment: .leading) // Align to left
-                        .padding(.top, 8)
-                        .padding(.bottom, 4)
-                        .padding(.leading, 10) // Add left padding
+            Spacer() // Push content to bottom
+            
+            HStack(alignment: .bottom, spacing: 4) {
+                // Today and tomorrow only
+                ForEach(0...1, id: \.self) { offset in
+                    dayView(offset: offset, useChineseText: useChineseText)
+                        .frame(maxWidth: .infinity)
                 }
-                
-                Spacer() // Push content to bottom
-                
-                HStack(alignment: .bottom, spacing: 4) {
-                    // Today and tomorrow only
-                    ForEach(0...1, id: \.self) { offset in
-                        dayView(offset: offset, useChineseText: useChineseText)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 10)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
+        }
+        .containerBackground(for: .widget) {
+            // Use direct color scheme detection for the background
+            if colorScheme == .dark {
+                Color.black
+            } else {
+                Color.white
             }
         }
     }
@@ -650,7 +698,12 @@ struct TodayStatusWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
-            TodayWidgetView(entry: entry)
+            // Log color scheme for debugging
+            let colorScheme = entry.preferredColorScheme ?? .light
+            print("TodayStatusWidget using color scheme: \(colorScheme == .dark ? "dark" : "light")")
+            
+            return TodayWidgetView(entry: entry)
+                .environment(\.colorScheme, colorScheme)
         }
         .configurationDisplayName("Today's Status")
         .description("Shows if today is a work day or off day.")
@@ -663,7 +716,12 @@ struct WeekOverviewWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
-            WorkdayQWidgetEntryView(entry: entry)
+            // Log color scheme for debugging
+            let colorScheme = entry.preferredColorScheme ?? .light
+            print("WeekOverviewWidget using color scheme: \(colorScheme == .dark ? "dark" : "light")")
+            
+            return WorkdayQWidgetEntryView(entry: entry)
+                .environment(\.colorScheme, colorScheme)
         }
         .configurationDisplayName("Week Overview")
         .description("Shows your work/off day status for the week.")
