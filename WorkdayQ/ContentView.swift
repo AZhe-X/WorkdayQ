@@ -9,6 +9,10 @@ import SwiftUI
 import SwiftData
 import WidgetKit
 
+// Constants for app group synchronization
+let appGroupID = "group.io.azhe.WorkdayQ"
+let lastUpdateKey = "lastDatabaseUpdate"
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var workDays: [WorkDay]
@@ -54,6 +58,12 @@ struct ContentView: View {
             }
             .onAppear {
                 checkAndCreateTodayEntry()
+                // Always reload widget when view appears
+                reloadWidgets()
+            }
+            .onChange(of: workDays) { _, _ in
+                // Reload widgets when workdays change 
+                reloadWidgets()
             }
         }
     }
@@ -166,8 +176,9 @@ struct ContentView: View {
             let newWorkDay = WorkDay(date: today)
             modelContext.insert(newWorkDay)
             
-            // Request widget to refresh
-            WidgetCenter.shared.reloadAllTimelines()
+            // Save data and notify widget
+            try? modelContext.save()
+            notifyWidgetDataChanged()
         }
     }
     
@@ -182,8 +193,9 @@ struct ContentView: View {
             modelContext.insert(newWorkDay)
         }
         
-        // Request widget to refresh
-        WidgetCenter.shared.reloadAllTimelines()
+        // Save data and notify widget
+        try? modelContext.save()
+        notifyWidgetDataChanged()
     }
     
     private func saveNote() {
@@ -197,8 +209,26 @@ struct ContentView: View {
             modelContext.insert(newWorkDay)
         }
         
-        // Request widget to refresh
+        // Save data and notify widget
+        try? modelContext.save()
+        notifyWidgetDataChanged()
+    }
+    
+    // Force reload of all widgets
+    private func reloadWidgets() {
+        print("Reloading all widget timelines")
         WidgetCenter.shared.reloadAllTimelines()
+    }
+    
+    // Notify widgets of data changes via UserDefaults
+    private func notifyWidgetDataChanged() {
+        // Update timestamp in shared UserDefaults to signal widget
+        let sharedDefaults = UserDefaults(suiteName: appGroupID)
+        sharedDefaults?.set(Date().timeIntervalSince1970, forKey: lastUpdateKey)
+        sharedDefaults?.synchronize()
+        
+        // Also trigger immediate reload
+        reloadWidgets()
     }
 }
 

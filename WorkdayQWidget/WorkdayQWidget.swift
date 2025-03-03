@@ -9,24 +9,33 @@ import WidgetKit
 import SwiftUI
 import SwiftData
 
+// Constants shared with app
+let appGroupID = "group.io.azhe.WorkdayQ"
+let lastUpdateKey = "lastDatabaseUpdate"
+
 struct Provider: TimelineProvider {
     func placeholder(in context: Context) -> DayEntry {
-        DayEntry(date: Date(), workDays: [])
+        DayEntry(date: Date(), workDays: [], lastUpdateTime: 0)
     }
 
     func getSnapshot(in context: Context, completion: @escaping (DayEntry) -> ()) {
-        let entry = DayEntry(date: Date(), workDays: [])
+        let entry = DayEntry(date: Date(), workDays: [], lastUpdateTime: 0)
         completion(entry)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<Entry>) -> ()) {
         // Handle MainActor-isolation by dispatching to the main actor
         Task { @MainActor in
+            // Get last update timestamp from shared UserDefaults
+            let sharedDefaults = UserDefaults(suiteName: appGroupID)
+            let lastUpdate = sharedDefaults?.double(forKey: lastUpdateKey) ?? 0
+            print("Widget checking for updates, last update: \(Date(timeIntervalSince1970: lastUpdate))")
+            
             // Access SwiftData container from AppGroup
             let modelConfiguration = ModelConfiguration(
                 schema: Schema([WorkDay.self]),
                 isStoredInMemoryOnly: false,
-                groupContainer: .identifier("group.io.azhe.WorkdayQ")
+                groupContainer: .identifier(appGroupID)
             )
             
             // Get the current date normalized to start of day for consistency
@@ -37,6 +46,7 @@ struct Provider: TimelineProvider {
             
             do {
                 let modelContainer = try ModelContainer(for: WorkDay.self, configurations: modelConfiguration)
+                
                 let descriptor = FetchDescriptor<WorkDay>(sortBy: [SortDescriptor(\.date)])
                 let fetchedData = try modelContainer.mainContext.fetch(descriptor)
                 
@@ -74,13 +84,23 @@ struct Provider: TimelineProvider {
             }
             
             // Create a timeline entry for now - use the normalized date
-            let entry = DayEntry(date: currentDate, workDays: workDays)
+            let entry = DayEntry(date: currentDate, workDays: workDays, lastUpdateTime: lastUpdate)
             
-            // Update refresh strategy to check more frequently
-            // 15 minutes is a good balance between freshness and battery life
-            let refreshDate = Calendar.current.date(byAdding: .minute, value: 15, to: currentDate)!
+            // Update refresh strategy based on context
+            let refreshInterval: TimeInterval
+            switch context.family {
+            case .systemSmall, .systemMedium:
+                // Use shorter refresh for visible widgets
+                refreshInterval = context.isPreview ? 3600 : 300 // 5 minutes for real widgets, 1 hour for previews
+            default:
+                // Default to 15 minutes for other cases
+                refreshInterval = 900
+            }
             
-            // Create a timeline with refresh
+            // Create timeline with refresh
+            let currentTime = Date()
+            let refreshDate = currentTime.addingTimeInterval(refreshInterval)
+            
             let timeline = Timeline(entries: [entry], policy: .after(refreshDate))
             completion(timeline)
         }
@@ -90,6 +110,7 @@ struct Provider: TimelineProvider {
 struct DayEntry: TimelineEntry {
     let date: Date  // This should always be start of day
     let workDays: [WorkDayStruct]
+    let lastUpdateTime: TimeInterval  // Track when data was last updated
     
     var todayWorkDay: WorkDayStruct? {
         let calendar = Calendar.current
@@ -173,7 +194,7 @@ struct TodayWidgetView: View {
                     
                     // Match the circle size with other widgets for consistency
                     Circle()
-                        .fill(entry.todayWorkDay?.isWorkDay == true ? Color.red : Color.green)
+                        .fill(entry.todayWorkDay?.isWorkDay ?? false ? Color.red : Color.green)
                         .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
                         .frame(width: 44, height: 44)
                 }
@@ -435,23 +456,23 @@ fileprivate func createTestWorkDays() -> [WorkDayStruct] {
     DayEntry(date: Date(), workDays: [
         WorkDayStruct(date: Date(), isWorkDay: true, note: "Important meeting"),
         WorkDayStruct(date: Calendar.current.date(byAdding: .day, value: 1, to: Date())!, isWorkDay: false)
-    ])
+    ], lastUpdateTime: 0)
 }
 
 #Preview(as: .systemMedium) {
     TodayStatusWidget()
 } timeline: {
-    DayEntry(date: Date(), workDays: createTestWorkDays())
+    DayEntry(date: Date(), workDays: createTestWorkDays(), lastUpdateTime: 0)
 }
 
 #Preview(as: .systemSmall) {
     WeekOverviewWidget()
 } timeline: {
-    DayEntry(date: Date(), workDays: createTestWorkDays())
+    DayEntry(date: Date(), workDays: createTestWorkDays(), lastUpdateTime: 0)
 }
 
 #Preview(as: .systemMedium) {
     WeekOverviewWidget()
 } timeline: {
-    DayEntry(date: Date(), workDays: createTestWorkDays())
+    DayEntry(date: Date(), workDays: createTestWorkDays(), lastUpdateTime: 0)
 }
