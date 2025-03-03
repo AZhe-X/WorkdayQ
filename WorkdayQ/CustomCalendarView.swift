@@ -54,7 +54,9 @@ struct CustomCalendarView: View {
         }
         .padding(.horizontal)
         .animation(.easeInOut(duration: 0.3), value: currentMonth)
-        .animation(.easeInOut(duration: 0.3), value: calendarViewMode)
+        .animation(.easeInOut(duration: 0.25), value: calendarViewMode) // Faster animation for view mode changes
+        .animation(.easeInOut(duration: 0.3), value: slideDirection) // Animation for slide direction changes
+        .animation(.easeInOut(duration: 0.3), value: yearSlideDirection) // Animation for year navigation
     }
     
     // Create a computed property for each header type with its own transition
@@ -65,14 +67,14 @@ struct CustomCalendarView: View {
                 monthYearHeader
                     .transition(.asymmetric(
                         insertion: .move(edge: .bottom).combined(with: .opacity), // Coming from months (moving down)
-                        removal: .move(edge: .top).combined(with: .opacity)    // Going to months (moving up)
+                        removal: .move(edge: .bottom).combined(with: .opacity)    // Going to months (moving up)
                     ))
                     .id("month-year-header")
             } else {
                 yearHeader
                     .transition(.asymmetric(
                         insertion: .move(edge: .top).combined(with: .opacity),    // Coming from days (moving up)
-                        removal: .move(edge: .bottom).combined(with: .opacity)       // Going to days (moving down)
+                        removal: .move(edge: .top).combined(with: .opacity)       // Going to days (moving down)
                     ))
                     .id("year-header")
             }
@@ -93,7 +95,7 @@ struct CustomCalendarView: View {
             // Month + Year title with slide transition
             ZStack {
                 Button(action: {
-                    withAnimation(.easeInOut(duration: 0.4)) {
+                    withAnimation(.easeInOut(duration: 0.25)) { // Faster transition for mode change
                         calendarViewMode = .months
                     }
                 }) {
@@ -238,7 +240,7 @@ struct CustomCalendarView: View {
             .frame(height: calendarGridHeight)
             .id(currentMonth) // This forces view recreation when month changes
             // Different transitions based on whether we're changing months or view modes
-            .modifier(DaysTransitionModifier(slideDirection: slideDirection))
+            .modifier(ContentTransitionModifier(slideDirection: slideDirection))
         }
         .frame(height: calendarGridHeight)
         .clipped() // Prevent any content from overflowing
@@ -291,12 +293,7 @@ struct CustomCalendarView: View {
         }
         .frame(height: calendarGridHeight)
         .clipped() // Prevent any content from overflowing
-        .transition(.asymmetric(
-            // Coming from days view (moving up) - enter from top
-            insertion: .move(edge: .top).combined(with: .opacity),
-            // Going back to days view (moving down) - exit to the top
-            removal: .move(edge: .top).combined(with: .opacity)
-        ))
+        .transition(.opacity) // Simple fade transition instead of slide
     }
     
     // Helper to determine the style for each month based on its state
@@ -342,7 +339,7 @@ struct CustomCalendarView: View {
         }
         
         // Go back to days view with animation
-        withAnimation(.easeInOut(duration: 0.4)) {
+        withAnimation(.easeInOut(duration: 0.35)) { // Slightly longer for smoother effect
             slideDirection = .none // Reset slide direction to trigger vertical transition
             calendarViewMode = .days
         }
@@ -512,18 +509,13 @@ extension Date {
 }
 
 // Add a new modifier to handle both transitions
-struct DaysTransitionModifier: ViewModifier {
+struct ContentTransitionModifier: ViewModifier {
     let slideDirection: SlideDirection
     
     func body(content: Content) -> some View {
         if slideDirection == .none {
-            // For view mode transitions:
-            // When going from days -> months (moving up): days slide down out of view
-            // When coming back from months -> days (moving down): days slide up into view
-            content.transition(.asymmetric(
-                insertion: .move(edge: .bottom).combined(with: .opacity), // Coming from months (moving down)
-                removal: .move(edge: .top).combined(with: .opacity)    // Going to months (moving up)
-            ))
+            // For view mode transitions - simple fade in/out
+            content.transition(.opacity)
         } else if slideDirection == .left {
             // Horizontal transition when changing months (left)
             content.transition(.asymmetric(
