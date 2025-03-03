@@ -9,10 +9,14 @@ import Foundation
 import SwiftData
 
 @Model
-final class Item {
-    var timestamp: Date
+final class WorkDay {
+    var date: Date
+    var isWorkDay: Bool
+    var note: String?
     
-    init(timestamp: Date) {
-        self.timestamp = timestamp
+    init(date: Date, isWorkDay: Bool = false, note: String? = nil) {
+        self.date = date
+        self.isWorkDay = isWorkDay
+        self.note = note
     }
 }

@@ -12,9 +12,15 @@ import SwiftData
 struct WorkdayQApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            WorkDay.self,
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        
+        // Use App Group container for shared access with widget
+        let modelConfiguration = ModelConfiguration(
+            schema: schema, 
+            isStoredInMemoryOnly: false,
+            groupContainer: .identifier("group.io.azhe.WorkdayQ")
+        )
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
