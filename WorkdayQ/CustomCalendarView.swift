@@ -79,11 +79,10 @@ struct CustomCalendarView: View {
             selectedDate = date
         }) {
             ZStack {
-                if let isWorkDay = dayWorkDay {
-                    Circle()
-                        .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
-                        .aspectRatio(1, contentMode: .fit)
-                }
+                // Always show a circle with appropriate color
+                Circle()
+                    .fill(dayWorkDay == true ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
+                    .aspectRatio(1, contentMode: .fit)
                 
                 if isSelected {
                     Circle()
@@ -98,20 +97,16 @@ struct CustomCalendarView: View {
                 Text("\(day)")
                     .font(.callout)
                     .fontWeight(isToday ? .bold : .regular)
-                    .foregroundColor(
-                        dayWorkDay != nil
-                            ? .white
-                            : (isToday ? .primary : .primary)
-                    )
+                    .foregroundColor(.white) // Always white text for better contrast
             }
         }
         .frame(height: 40)
         .padding(.vertical, 4)
     }
     
-    private func getDayWorkStatus(_ date: Date) -> Bool? {
+    private func getDayWorkStatus(_ date: Date) -> Bool {
         let calendar = Calendar.current
-        return workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) })?.isWorkDay
+        return workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) })?.isWorkDay ?? false
     }
     
     private func previousMonth() {

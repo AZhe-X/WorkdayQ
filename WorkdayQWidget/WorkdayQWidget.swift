@@ -96,6 +96,8 @@ struct DayEntry: TimelineEntry {
         return workDays.first { calendar.isDate($0.date, inSameDayAs: date) }
     }
     
+    // Returns the work status for a day offset from today
+    // If no record exists, returns null but the display code should treat it as false (off day)
     func workDayForOffset(_ offset: Int) -> WorkDayStruct? {
         let calendar = Calendar.current
         guard let targetDate = calendar.date(byAdding: .day, value: offset, to: date) else {
@@ -142,8 +144,10 @@ struct TodayWidgetView: View {
     
     var body: some View {
         ZStack {
-            ContainerRelativeShape()
-                .fill(Color(UIColor.systemBackground))
+            // Use white background for consistency with other widgets
+            Rectangle()
+                .fill(Color.white)
+                .edgesIgnoringSafeArea(.all)
             
             VStack(alignment: .leading, spacing: 8) {
                 Text(dateFormatter.string(from: entry.date))
@@ -158,18 +162,20 @@ struct TodayWidgetView: View {
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                         
-                        Text(entry.todayWorkDay?.isWorkDay == true ? "Workday" : "Off day")
+                        let isWorkDay = entry.todayWorkDay?.isWorkDay ?? false
+                        Text(isWorkDay ? "Workday" : "Off day")
                             .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(entry.todayWorkDay?.isWorkDay == true ? .red : .green)
+                            .foregroundColor(isWorkDay ? .red : .green)
                             .minimumScaleFactor(0.6)
                     }
                     
                     Spacer()
                     
+                    // Match the circle size with other widgets for consistency
                     Circle()
-                        .fill(entry.todayWorkDay?.isWorkDay == true ? Color.red.opacity(0.9) : Color.green.opacity(0.9))
+                        .fill(entry.todayWorkDay?.isWorkDay == true ? Color.red : Color.green)
                         .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
-                        .frame(width: 36, height: 36)
+                        .frame(width: 44, height: 44)
                 }
                 
                 if let note = entry.todayWorkDay?.note, !note.isEmpty {
@@ -196,15 +202,19 @@ struct WeekWidgetView: View {
                 .fill(Color.white)
                 .edgesIgnoringSafeArea(.all)
             
-            HStack(alignment: .bottom, spacing: 0) {
-                // Today and the next 6 days
-                ForEach(0...6, id: \.self) { offset in
-                    dayView(for: offset, isLarge: offset <= 1) // Make today and tomorrow larger
-                        .frame(maxWidth: .infinity)
+            VStack(spacing: 0) {
+                Spacer() // Push content to bottom
+                
+                HStack(alignment: .bottom, spacing: 0) {
+                    // Today and the next 6 days
+                    ForEach(0...6, id: \.self) { offset in
+                        dayView(for: offset, isLarge: offset <= 1) // Make today and tomorrow larger
+                            .frame(maxWidth: .infinity)
+                    }
                 }
+                .padding(.horizontal, 8)
+                .padding(.bottom, 10)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 10)
         }
     }
     
@@ -229,6 +239,8 @@ struct WeekWidgetView: View {
                 .font(.system(size: isLarge ? 13 : 10))
                 .fontWeight(.medium)
                 .foregroundColor(isToday ? .primary : .secondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
             
             ZStack {
                 Circle()
@@ -240,7 +252,7 @@ struct WeekWidgetView: View {
                     .foregroundColor(.white)
             }
         }
-        .padding(.vertical, 4)
+        .frame(height: isLarge ? 80 : 70) // Fixed height for better alignment
         .padding(.horizontal, 2)
         .background(
             Group {
@@ -266,15 +278,19 @@ struct SmallWeekWidgetView: View {
                 .fill(Color.white)
                 .edgesIgnoringSafeArea(.all)
             
-            HStack(alignment: .bottom, spacing: 4) {
-                // Today and tomorrow only
-                ForEach(0...1, id: \.self) { offset in
-                    dayView(for: offset)
-                        .frame(maxWidth: .infinity)
+            VStack(spacing: 0) {
+                Spacer() // Push content to bottom
+                
+                HStack(alignment: .bottom, spacing: 4) {
+                    // Today and tomorrow only
+                    ForEach(0...1, id: \.self) { offset in
+                        dayView(for: offset)
+                            .frame(maxWidth: .infinity)
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
         }
     }
     
@@ -293,7 +309,7 @@ struct SmallWeekWidgetView: View {
         
         let isToday = offset == 0
         
-        VStack(spacing: 4) {
+        VStack(spacing: 8) {
             Text(dayName)
                 .font(.system(size: 14))
                 .fontWeight(.medium)
@@ -309,7 +325,7 @@ struct SmallWeekWidgetView: View {
                     .foregroundColor(.white)
             }
         }
-        .padding(.vertical, 4)
+        .frame(height: 90) // Fixed height for better alignment
         .padding(.horizontal, 2)
         .background(
             Group {

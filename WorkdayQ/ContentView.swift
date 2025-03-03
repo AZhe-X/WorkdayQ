@@ -68,15 +68,16 @@ struct ContentView: View {
                 .foregroundColor(.secondary)
             
             HStack {
-                Text(todayWorkDay?.isWorkDay == true ? "Workday" : "Off day")
+                let isWorkDay = todayWorkDay?.isWorkDay ?? false
+                Text(isWorkDay ? "Workday" : "Off day")
                     .font(.title2)
                     .fontWeight(.bold)
-                    .foregroundColor(todayWorkDay?.isWorkDay == true ? .red : .green)
+                    .foregroundColor(isWorkDay ? .red : .green)
                 
                 Spacer()
                 
                 Circle()
-                    .fill(todayWorkDay?.isWorkDay == true ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
+                    .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
                     .frame(width: 30, height: 30)
             }
             
@@ -98,11 +99,13 @@ struct ContentView: View {
     var dateControlsView: some View {
         HStack {
             Button(action: toggleSelectedDateStatus) {
-                Text(selectedWorkDay?.isWorkDay == true ? "Set as Off Day" : "Set as Work Day")
+                // Treat null as off day
+                let isWorkDay = selectedWorkDay?.isWorkDay ?? false
+                Text(isWorkDay ? "Set as Off Day" : "Set as Work Day")
                     .font(.headline)
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(selectedWorkDay?.isWorkDay == true ? Color.green : Color.red)
+                    .background(isWorkDay ? Color.green : Color.red)
                     .foregroundColor(.white)
                     .cornerRadius(10)
             }
@@ -110,6 +113,8 @@ struct ContentView: View {
             Button(action: {
                 if let selectedDay = selectedWorkDay {
                     noteText = selectedDay.note ?? ""
+                } else {
+                    noteText = ""
                 }
                 showingNoteEditor = true
             }) {
