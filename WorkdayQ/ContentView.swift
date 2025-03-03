@@ -15,6 +15,7 @@ let appGroupID = "group.io.azhe.WorkdayQ"
 let lastUpdateKey = "lastDatabaseUpdate"
 let languagePreferenceKey = "languagePreference"
 let customWorkTermKey = "customWorkTerm" // Add key for custom work term storage
+let appearancePreferenceKey = "appearancePreference" // Add key for dark mode preference
 
 // Add extension to dismiss keyboard (place after imports, before constants)
 extension View {
@@ -56,6 +57,31 @@ enum AppLanguage: Int, CaseIterable, Identifiable {
     }
 }
 
+// Add an enum for appearance options after the AppLanguage enum
+enum AppAppearance: Int, CaseIterable, Identifiable {
+    case systemDefault = 0
+    case light = 1
+    case dark = 2
+    
+    var id: Int { rawValue }
+    
+    var displayName: String {
+        switch self {
+        case .systemDefault: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+    
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .systemDefault: return nil
+        case .light: return .light
+        case .dark: return .dark
+        }
+    }
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var workDays: [WorkDay]
@@ -66,6 +92,7 @@ struct ContentView: View {
     @State private var showingSettings = false
     @AppStorage(languagePreferenceKey) private var languagePreference = 0 // Default: system
     @AppStorage(customWorkTermKey) private var customWorkTerm = "上班" // Default work term
+    @AppStorage(appearancePreferenceKey) private var appearancePreference = 0 // Default: system
     @FocusState private var isCustomTermFieldFocused: Bool // Add focus state
     
     // Add explicit app group UserDefaults access for direct writes
@@ -132,7 +159,7 @@ struct ContentView: View {
         }
         return text.replacingOccurrences(of: "上班", with: customWorkTerm)
     }
-    
+
     var body: some View {
         NavigationStack {
             VStack(spacing: 20) {
@@ -217,6 +244,8 @@ struct ContentView: View {
                 reloadWidgets()
                 // Make sure shared defaults has the current language preference
                 syncLanguagePreference()
+                // Also sync appearance preference
+                syncAppearancePreference()
             }
             .onChange(of: languagePreference) { oldValue, newValue in
                 // When language changes, sync it immediately and reload widgets
@@ -224,10 +253,18 @@ struct ContentView: View {
                 syncLanguagePreference()
                 reloadWidgets() // Force widgets to refresh
             }
+            .onChange(of: appearancePreference) { oldValue, newValue in
+                // When appearance changes, sync it immediately and reload widgets
+                print("Appearance preference changed from \(oldValue) to \(newValue)")
+                syncAppearancePreference()
+                reloadWidgets() // Force widgets to refresh
+            }
             .onChange(of: workDays) { _, _ in
                 // Reload widgets when workdays change 
                 reloadWidgets()
             }
+            // Apply the preferred color scheme
+            .preferredColorScheme(AppAppearance(rawValue: appearancePreference)?.colorScheme)
         }
     }
     
@@ -290,7 +327,9 @@ struct ContentView: View {
         .background(
             RoundedRectangle(cornerRadius: 20) // iOS widget corner radius
                 .fill(Color(UIColor.systemBackground))
-                .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+                .shadow(color: Color(UIColor { traitCollection in
+                    traitCollection.userInterfaceStyle == .dark ? .white : .black
+                }).opacity(0.5), radius: 5, x: 0, y: 2)
         )
     }
     
@@ -428,6 +467,9 @@ struct ContentView: View {
             // Make sure custom work term is also synced
             sharedDefaults.set(customWorkTerm, forKey: customWorkTermKey)
             
+            // Make sure appearance preference is also synced
+            sharedDefaults.set(appearancePreference, forKey: appearancePreferenceKey)
+            
             // Force write
             sharedDefaults.synchronize()
             
@@ -517,8 +559,18 @@ struct ContentView: View {
                 }
                 
                 Section(header: Text(localizedText("Appearance", chineseText: "外观"))) {
-                    Toggle(localizedText("Dark Mode", chineseText: "深色模式"), isOn: .constant(false))
-                        .disabled(true) // Placeholder for future implementation
+                    Picker(localizedText("Appearance Mode", chineseText: "外观模式"), selection: $appearancePreference) {
+                        Text(localizedText("System", chineseText: "跟随系统")).tag(AppAppearance.systemDefault.rawValue)
+                        Text(localizedText("Light", chineseText: "浅色模式")).tag(AppAppearance.light.rawValue)
+                        Text(localizedText("Dark", chineseText: "深色模式")).tag(AppAppearance.dark.rawValue)
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: appearancePreference) { oldValue, newValue in
+                        // Sync the appearance preference to UserDefaults for widget access
+                        syncAppearancePreference()
+                        // Force widgets to reload with new appearance
+                        reloadWidgets()
+                    }
                     
                     Picker(localizedText("Start of Week", chineseText: "每周开始日"), selection: .constant(0)) {
                         Text(localizedText("Sunday", chineseText: "周日")).tag(0)
@@ -667,6 +719,20 @@ struct ContentView: View {
         sharedDefaults.synchronize() // Force immediate write
         
         print("Synced custom work term to UserDefaults: \(customWorkTerm)")
+    }
+
+    // Add function to sync appearance preference to shared UserDefaults
+    private func syncAppearancePreference() {
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupID) else {
+            print("Failed to access shared UserDefaults")
+            return
+        }
+        
+        // Set the appearance preference in shared UserDefaults
+        sharedDefaults.set(appearancePreference, forKey: appearancePreferenceKey)
+        sharedDefaults.synchronize() // Force immediate write
+        
+        print("Synced appearance preference to UserDefaults: \(appearancePreference)")
     }
 }
 

@@ -406,9 +406,10 @@ struct CustomCalendarView: View {
                     .fill(circleColor)
                     .frame(width: 36, height: 36)
                 
-                // White outline - centered on path, not inside
+                // Outline - centered on path, not inside
+                // Use environment to detect dark mode
                 Circle()
-                    .stroke(Color.white, lineWidth: 4.5)
+                    .stroke(Color(UIColor.systemBackground), lineWidth: 4.5)
                     .frame(width: 36, height: 36)
                 
                 // Colored outline - centered on path, not inside
