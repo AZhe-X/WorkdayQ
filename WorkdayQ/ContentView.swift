@@ -359,13 +359,46 @@ struct ContentView: View {
     
     var noteEditorView: some View {
         NavigationStack {
-            VStack {
-                TextField(localizedText("Enter note for \(dateFormatter.string(from: selectedDate))",
-                                       chineseText: "为 \(dateFormatter.string(from: selectedDate)) 添加备注"), 
-                          text: $noteText, axis: .vertical)
-                    .padding()
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(5...10)
+            VStack(alignment: .leading, spacing: 12) {
+                // User note input with 15 character limit
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(localizedText("Your Note (max 15 characters):", chineseText: "您的备注 (最多15个字符):"))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    
+                    TextField(localizedText("Enter note", chineseText: "输入备注"), 
+                              text: $noteText)
+                        .padding()
+                        .textFieldStyle(.roundedBorder)
+                        .onChange(of: noteText) { oldValue, newValue in
+                            // Limit to 15 characters
+                            if newValue.count > 15 {
+                                noteText = String(newValue.prefix(15))
+                            }
+                        }
+                    
+                    Text("\(noteText.count)/15")
+                        .font(.caption)
+                        .foregroundColor(noteText.count >= 15 ? .red : .secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.trailing, 8)
+                }
+                
+                // Display system note (holiday) if available
+                if let systemNote = HolidayManager.shared.getSystemNote(for: selectedDate) {
+                    Divider()
+                        .padding(.vertical, 4)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(localizedText("Holiday Information:", chineseText: "节假日信息:"))
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        
+                        Text(systemNote)
+                            .padding(.vertical, 4)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
                 
                 Spacer()
             }
