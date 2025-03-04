@@ -111,10 +111,20 @@ struct CustomCalendarView: View {
         return isDefaultWorkDay(date)
     }
     
-    // Add a new helper method to check if a day has been explicitly set by the user
+    // Helper method to check if a day has been explicitly set by the user
+    // Now checks if the work status differs from the default
     private func isExplicitlySetByUser(_ date: Date) -> Bool {
         let calendar = Calendar.current
-        return workDays.contains(where: { calendar.isDate($0.date, inSameDayAs: date) })
+        
+        // Check if we have an entry for this date
+        if let existingDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            // Only consider it user-edited if the work status differs from default
+            let defaultStatus = isDefaultWorkDay(date)
+            return existingDay.isWorkDay != defaultStatus
+        }
+        
+        // No entry means not user-edited
+        return false
     }
     
     var body: some View {
