@@ -530,13 +530,11 @@ struct TodayWidgetView: View {
         .frame(height: 155)
         .frame(maxWidth: .infinity)
         .containerBackground(for: .widget) {
-            // Use direct color scheme detection for the background
+            // Set explicit colors but respect the environment colorScheme
             if colorScheme == .dark {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(red: 0.11, green: 0.11, blue: 0.12)) // iOS native dark background color
+                Color(red: 0.11, green: 0.11, blue: 0.12) // Custom dark mode color
             } else {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.white)
+                Color.white // Light mode color
             }
         }
     }
@@ -598,11 +596,11 @@ struct WeekWidgetView: View {
             .padding(.bottom, 10)
         }
         .containerBackground(for: .widget) {
-            // Use direct color scheme detection for the background
+            // Set explicit colors but respect the environment colorScheme
             if colorScheme == .dark {
-                Color(red: 0.11, green: 0.11, blue: 0.12) // iOS native dark background color
+                Color(red: 0.11, green: 0.11, blue: 0.12) // Custom dark mode color
             } else {
-                Color.white
+                Color.white // Light mode color
             }
         }
     }
@@ -727,11 +725,11 @@ struct SmallWeekWidgetView: View {
             .padding(.bottom, 10)
         }
         .containerBackground(for: .widget) {
-            // Use direct color scheme detection for the background
+            // Set explicit colors but respect the environment colorScheme
             if colorScheme == .dark {
-                Color(red: 0.11, green: 0.11, blue: 0.12) // iOS native dark background color
+                Color(red: 0.11, green: 0.11, blue: 0.12) // Custom dark mode color
             } else {
-                Color.white
+                Color.white // Light mode color
             }
         }
     }
@@ -796,12 +794,14 @@ struct TodayStatusWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
-            // Log color scheme for debugging
-            let colorScheme = entry.preferredColorScheme ?? .light
-            print("TodayStatusWidget using color scheme: \(colorScheme == .dark ? "dark" : "light")")
-            
-            return TodayWidgetView(entry: entry)
-                .environment(\.colorScheme, colorScheme)
+            if let explicitColorScheme = entry.preferredColorScheme {
+                // Only set explicitly if user chose light or dark mode
+                TodayWidgetView(entry: entry)
+                    .environment(\.colorScheme, explicitColorScheme)
+            } else {
+                // For "follow system", don't override the environment
+                TodayWidgetView(entry: entry)
+            }
         }
         .configurationDisplayName("Today's Status")
         .description("Shows if today is a work day or off day.")
@@ -814,12 +814,14 @@ struct WeekOverviewWidget: Widget {
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: Provider()) { entry in
-            // Log color scheme for debugging
-            let colorScheme = entry.preferredColorScheme ?? .light
-            print("WeekOverviewWidget using color scheme: \(colorScheme == .dark ? "dark" : "light")")
-            
-            return WorkdayQWidgetEntryView(entry: entry)
-                .environment(\.colorScheme, colorScheme)
+            if let explicitColorScheme = entry.preferredColorScheme {
+                // Only set explicitly if user chose light or dark mode
+                WorkdayQWidgetEntryView(entry: entry)
+                    .environment(\.colorScheme, explicitColorScheme)
+            } else {
+                // For "follow system", don't override the environment
+                WorkdayQWidgetEntryView(entry: entry)
+            }
         }
         .configurationDisplayName("Week Overview")
         .description("Shows your work/off day status for the week.")
