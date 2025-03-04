@@ -10,6 +10,8 @@
 		657838E32D75C7B9006B6FBF /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 657838E22D75C7B9006B6FBF /* WidgetKit.framework */; };
 		657838E52D75C7B9006B6FBF /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 657838E42D75C7B9006B6FBF /* SwiftUI.framework */; };
 		657838F52D75C7BA006B6FBF /* WorkdayQWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 657838E02D75C7B9006B6FBF /* WorkdayQWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		657839742D771B1D006B6FBF /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 657839722D771B1D006B6FBF /* InfoPlist.strings */; };
+		657839752D771B1D006B6FBF /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 6578396F2D771B1D006B6FBF /* InfoPlist.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +60,8 @@
 		657838E22D75C7B9006B6FBF /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		657838E42D75C7B9006B6FBF /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		657838FB2D75C7EA006B6FBF /* WorkdayQWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WorkdayQWidgetExtension.entitlements; sourceTree = "<group>"; };
+		6578396E2D771B1D006B6FBF /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = InfoPlist.strings; sourceTree = "<group>"; };
+		657839712D771B1D006B6FBF /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = InfoPlist.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -143,6 +147,8 @@
 		6578389D2D75C1F3006B6FBF = {
 			isa = PBXGroup;
 			children = (
+				657839702D771B1D006B6FBF /* en.lproj */,
+				657839732D771B1D006B6FBF /* zh-Hans.lproj */,
 				657838FB2D75C7EA006B6FBF /* WorkdayQWidgetExtension.entitlements */,
 				657838A82D75C1F3006B6FBF /* WorkdayQ */,
 				657838BD2D75C1F4006B6FBF /* WorkdayQTests */,
@@ -171,6 +177,22 @@
 				657838E42D75C7B9006B6FBF /* SwiftUI.framework */,
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		657839702D771B1D006B6FBF /* en.lproj */ = {
+			isa = PBXGroup;
+			children = (
+				6578396F2D771B1D006B6FBF /* InfoPlist.strings */,
+			);
+			path = en.lproj;
+			sourceTree = "<group>";
+		};
+		657839732D771B1D006B6FBF /* zh-Hans.lproj */ = {
+			isa = PBXGroup;
+			children = (
+				657839722D771B1D006B6FBF /* InfoPlist.strings */,
+			);
+			path = "zh-Hans.lproj";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -300,6 +322,7 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
 			);
 			mainGroup = 6578389D2D75C1F3006B6FBF;
 			minimizedProjectReferenceProxies = 1;
@@ -321,6 +344,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				657839742D771B1D006B6FBF /* InfoPlist.strings in Resources */,
+				657839752D771B1D006B6FBF /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -395,6 +420,25 @@
 			targetProxy = 657838F22D75C7BA006B6FBF /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		6578396F2D771B1D006B6FBF /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				6578396E2D771B1D006B6FBF /* en */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		657839722D771B1D006B6FBF /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				657839712D771B1D006B6FBF /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		657838CE2D75C1F4006B6FBF /* Debug */ = {
