@@ -328,6 +328,12 @@ struct DayEntry: TimelineEntry {
     }
     
     // Check if a specific date is a workday, using stored data or default rules
+    /// Determine if a date is a work day using the three-tier priority system
+    /// 1. First check explicit user-set entry (highest priority)
+    /// 2. Then check holiday data (medium priority)
+    /// 3. Finally fall back to default weekday rules (lowest priority)
+    /// - Parameter date: The date to check
+    /// - Returns: true if it's a work day, false if it's an off day
     func isWorkDay(forDate date: Date) -> Bool {
         let calendar = Calendar.current
         

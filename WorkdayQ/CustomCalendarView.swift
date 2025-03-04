@@ -95,6 +95,12 @@ struct CustomCalendarView: View {
     }
     
     // Helper to determine if a date is a workday (using default rules if no explicit entry)
+    /// Determine if a date is a work day using the three-tier priority system
+    /// 1. First check explicit user-set entry (highest priority)
+    /// 2. Then check holiday data (medium priority)
+    /// 3. Finally fall back to default weekday rules (lowest priority)
+    /// - Parameter date: The date to check
+    /// - Returns: true if it's a work day, false if it's an off day
     private func isWorkDay(_ date: Date) -> Bool {
         // First check if we have an explicit entry
         let calendar = Calendar.current
@@ -112,13 +118,21 @@ struct CustomCalendarView: View {
     }
     
     // Helper method to check if a day has been explicitly set by the user
-    // Now checks if the work status differs from the default
+    // Now checks if the work status differs from what would be expected
     private func isExplicitlySetByUser(_ date: Date) -> Bool {
         let calendar = Calendar.current
         
         // Check if we have an entry for this date
         if let existingDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
-            // Only consider it user-edited if the work status differs from default
+            // First determine what the status would be without this explicit entry
+            // (using holiday data or default rules)
+            
+            // Check what the status would be from holiday data
+            if let holidayStatus = HolidayManager.shared.isWorkDay(for: date) {
+                return existingDay.isWorkDay != holidayStatus
+            }
+            
+            // If no holiday data, use default weekday/weekend rules
             let defaultStatus = isDefaultWorkDay(date)
             return existingDay.isWorkDay != defaultStatus
         }
@@ -453,7 +467,7 @@ struct CustomCalendarView: View {
         let isUserSet = isExplicitlySetByUser(date)
         
         // Determine opacity
-        let opacity = showStatusOpacityDifference ? (isUserSet ? 0.8 : 0.6) : 0.8
+        let opacity = showStatusOpacityDifference ? (isUserSet ? 0.8 : 0.5) : 0.8
         
         // Get colors
         let red = Color.red
@@ -492,7 +506,7 @@ struct CustomCalendarView: View {
                     .foregroundColor(.white)
                 ZStack {
                     Circle()
-                        .stroke(Color(UIColor.systemBackground).opacity(hasSystemNote ? 1 : 0), lineWidth: 1)
+                        .stroke(Color.white.opacity(hasSystemNote ? 1 : 0), lineWidth: 1)
                         .frame(width: 5, height: 5)
 
                     Circle()

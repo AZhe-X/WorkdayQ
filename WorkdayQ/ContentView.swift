@@ -109,22 +109,28 @@ struct ContentView: View {
     // Add explicit app group UserDefaults access for direct writes
     private let sharedDefaults = UserDefaults(suiteName: appGroupID)
     
-    // Get the work status for a specific date, using stored data, holiday data, or default rules
+    /// UNIFIED FUNCTION: Determine if a date is a work day using the three-tier priority system
+    /// 1. First check explicit user-set entry (highest priority)
+    /// 2. Then check holiday data (medium priority)
+    /// 3. Finally fall back to default weekday rules (lowest priority)
+    /// - Parameter date: The date to check
+    /// - Returns: true if it's a work day, false if it's an off day
     func isWorkDay(forDate date: Date) -> Bool {
         let calendar = Calendar.current
+        let dayStart = calendar.startOfDay(for: date)
         
         // First check if we have an explicit user record (highest priority)
-        if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+        if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: dayStart) }) {
             return explicitDay.isWorkDay
         }
         
         // Next check holiday data (medium priority)
-        if let holidayStatus = HolidayManager.shared.isWorkDay(for: date) {
+        if let holidayStatus = HolidayManager.shared.isWorkDay(for: dayStart) {
             return holidayStatus
         }
         
         // Fall back to default rules (lowest priority)
-        return isDefaultWorkDay(date)
+        return isDefaultWorkDay(dayStart)
     }
     
     var todayWorkDay: WorkDay? {
@@ -132,14 +138,9 @@ struct ContentView: View {
         return workDays.first { calendar.isDate($0.date, inSameDayAs: Date()) }
     }
     
-    // Check if today is a workday using stored data or default rules
+    // Use unified isWorkDay function for today
     var isTodayWorkDay: Bool {
-        // If we have an explicit entry for today, use it
-        if let explicitDay = todayWorkDay {
-            return explicitDay.isWorkDay
-        }
-        // Otherwise use default rules: weekdays = work, weekends = off
-        return isDefaultWorkDay(Date())
+        return isWorkDay(forDate: Date())
     }
     
     var selectedWorkDay: WorkDay? {
@@ -307,15 +308,23 @@ struct ContentView: View {
             }
             
             HStack {
-                let isWorkDay = isTodayWorkDay
+                let isWorkDay = isWorkDay(forDate: Date()) // Use unified function
                 
                 // Use different text format for Chinese
                 if languagePreference == AppLanguage.chinese.rawValue {
-                    Text(customizeWorkTerm(isWorkDay ? "要上班" : "不上班"))
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(isWorkDay ? .red : .green)
-                        .padding(.top, -3)
+                    HStack(alignment: .lastTextBaseline, spacing: 8) {
+                        Text(customizeWorkTerm(isWorkDay ? "要上班" : "不上班"))
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundColor(isWorkDay ? .red : .green)
+                        
+                        // Add holiday note if available
+                        if let holidayNote = HolidayManager.shared.getSystemNote(for: Date()) {
+                            Text(holidayNote)
+                                .font(.title3)
+                                .foregroundColor(.gray)
+                        }
+                    }
                 } else {
                     Text(isWorkDay ? 
                          localizedText("Workday", chineseText: "工作日") : 
@@ -336,8 +345,8 @@ struct ContentView: View {
                 Text(note)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                    .lineLimit(2)
-                    .padding(.top, 4)
+                    .lineLimit(1)
+                    .padding(.top, -5)
             }
         }
         .padding(.horizontal, 28)
@@ -362,7 +371,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 12) {
                 // User note input with 15 character limit
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(localizedText("Your Note (max 15 characters):", chineseText: "您的备注 (最多15个字符):"))
+                    Text(localizedText("Your Not:", chineseText: "您的备注:"))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
@@ -423,54 +432,42 @@ struct ContentView: View {
     }
     
     private func checkAndCreateTodayEntry() {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        // This method has been simplified to not create an entry for today
+        // unless it's explicitly set by the user. This allows the app to
+        // use default rules or holiday data for today's display.
+        //
+        // Creating an entry for today automatically causes it to appear as
+        // user-edited in the UI, which isn't the intended behavior.
         
-        // Only create an entry for today if one doesn't exist AND it would differ from the default
-        // No need to create an entry if it would just use the default status
-        let defaultStatus = isDefaultWorkDay(today)
-        
-        // If today doesn't have an entry yet, we'll create one ONLY if we need to override the default
-        // This is now just a placeholder for future manual toggle, but we won't set it different from default
-        if !workDays.contains(where: { calendar.isDate($0.date, inSameDayAs: today) }) {
-            let newWorkDay = WorkDay(date: today, isWorkDay: defaultStatus)
-            modelContext.insert(newWorkDay)
-            
-            // Save data and notify widget with better error handling
-            do {
-                try modelContext.save()
-                notifyWidgetDataChanged()
-            } catch {
-                print("Error saving today's entry: \(error.localizedDescription)")
-            }
-        }
+        // We don't need to create any entry for today by default
+        // The app will use:
+        // 1. Existing entry if the user has set one
+        // 2. Holiday data if available
+        // 3. Default rules (weekday = work, weekend = off) as fallback
     }
     
     private func toggleWorkStatus(for date: Date) {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: date)
         
-        // Check the default status for this date
-        let defaultStatus = isDefaultWorkDay(dayStart)
-        
         // If an entry already exists, toggle its status
         if let existingDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: dayStart) }) {
-            // Toggle the work status
+            // Toggle the work status (only changing the work status, not touching the note)
             existingDay.isWorkDay.toggle()
             
-            // If the toggled status now matches the default, we can delete this record
-            if existingDay.isWorkDay == defaultStatus && (existingDay.note == nil || existingDay.note!.isEmpty) {
-                modelContext.delete(existingDay)
-            }
+            // Save the updated entry - we never delete entries when toggling work status
+            // This ensures that user-set work statuses are always preserved
         } else {
-            // No entry exists - create a new one only if it would differ from default
-            // The new status would be the opposite of the default
-            let newStatus = !defaultStatus
+            // No entry exists - create a new one with toggled status (opposite of the expected status)
+            let expectedStatus = isWorkDay(forDate: dayStart) // Use unified function
+            let newStatus = !expectedStatus  // Toggle from whatever would be expected (default or holiday)
+            
+            // Create new entry with the toggled status and empty note
             let newWorkDay = WorkDay(date: dayStart, isWorkDay: newStatus)
             modelContext.insert(newWorkDay)
         }
         
-        // Save data and notify widget with better error handling
+        // Save data and notify widget
         do {
             try modelContext.save()
             notifyWidgetDataChanged()
@@ -483,26 +480,37 @@ struct ContentView: View {
         let calendar = Calendar.current
         let selectedDayStart = calendar.startOfDay(for: selectedDate)
         
-        // Check the default status for this date
-        let defaultStatus = isDefaultWorkDay(selectedDayStart)
-        
         if let existingDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: selectedDayStart) }) {
-            // Update existing entry with the new note
+            // Just update the note, don't touch the work status
             existingDay.note = noteText.isEmpty ? nil : noteText
             
-            // If the status matches default and there's no note, we can delete this record
-            if existingDay.isWorkDay == defaultStatus && (existingDay.note == nil || existingDay.note!.isEmpty) {
-                modelContext.delete(existingDay)
+            // If the note is now empty, and we have an explicit record just for a note,
+            // we can delete it (but ONLY if the work status is already the expected one)
+            if (existingDay.note == nil || existingDay.note!.isEmpty) {
+                // This is the expected status without our explicit entry
+                let expectedStatus = isWorkDay(forDate: selectedDayStart) // Use unified function
+                
+                // Only delete if the entry has the same work status as expected
+                // AND the note is empty - this means the entry isn't providing any value
+                if existingDay.isWorkDay == expectedStatus {
+                    modelContext.delete(existingDay)
+                }
             }
         } else {
-            // Only create a new entry if there is a note to add (since status would be default)
+            // Only create a new entry if there is a note to add
             if !noteText.isEmpty {
-                let newWorkDay = WorkDay(date: selectedDayStart, isWorkDay: defaultStatus, note: noteText)
+                // Get the expected work status but don't modify it
+                // This honors any holiday or default status
+                let expectedStatus = isWorkDay(forDate: selectedDayStart) // Use unified function
+                
+                // Create new entry with the expected status and the note
+                let newWorkDay = WorkDay(date: selectedDayStart, isWorkDay: expectedStatus, note: noteText)
                 modelContext.insert(newWorkDay)
             }
+            // If note is empty, we don't create a database entry at all
         }
         
-        // Save data and notify widget with better error handling
+        // Save data and notify widget
         do {
             try modelContext.save()
             notifyWidgetDataChanged()
