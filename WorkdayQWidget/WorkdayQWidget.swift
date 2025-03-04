@@ -297,12 +297,14 @@ struct DayEntry: TimelineEntry {
     
     // Get the work status for today with default rules
     var isTodayWorkDay: Bool {
-        // If we have an explicit entry for today, use it
-        if let explicitDay = todayWorkDay {
-            return explicitDay.isWorkDay
-        }
-        // Otherwise use default rules: weekdays = work, weekends = off
-        return isDefaultWorkDay(date)
+        // Use the unified function for consistency
+        return isWorkDay(forDate: date)
+    }
+    
+    // Get note for a specific date without affecting work status
+    func getNoteForDate(_ date: Date) -> String? {
+        let calendar = Calendar.current
+        return workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) })?.note
     }
     
     // Returns the work status for a day offset from today
@@ -320,8 +322,9 @@ struct DayEntry: TimelineEntry {
             if let explicitDay = result {
                 print("Looking for day at offset \(offset): \(targetDate), found explicit record: \(explicitDay.isWorkDay)")
             } else {
-                let defaultStatus = isDefaultWorkDay(targetDate)
-                print("Looking for day at offset \(offset): \(targetDate), using default status: \(defaultStatus)")
+                // Use the unified isWorkDay function to respect all three tiers
+                let status = isWorkDay(forDate: targetDate)
+                print("Looking for day at offset \(offset): \(targetDate), using calculated status: \(status)")
             }
         }
         return result
@@ -389,6 +392,7 @@ struct WorkdayQWidgetEntryView: View {
 struct TodayWidgetView: View {
     var entry: Provider.Entry
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.widgetFamily) var family // Add widget family environment
     // Use direct UserDefaults access with a non-optional default
     private let userDefaults = UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
     
@@ -407,7 +411,16 @@ struct TodayWidgetView: View {
     
     var dateFormatter: DateFormatter {
         let formatter = DateFormatter()
-        formatter.dateStyle = .medium
+        
+        // Conditional date style based on widget size
+        if family == .systemSmall {
+            // For small widgets, show only month and day
+            formatter.dateFormat = AppLanguage.shouldUseChineseText(userDefaults.integer(forKey: languagePreferenceKey)) ? 
+                "M月d日" : "MMM d" // Chinese: "5月10日", English: "May 10"
+        } else {
+            // For medium widgets, keep the current medium date style
+            formatter.dateStyle = .medium
+        }
         
         // Try to respect the language preference for date format
         let langPref = userDefaults.integer(forKey: languagePreferenceKey)
@@ -422,6 +435,7 @@ struct TodayWidgetView: View {
         // Debug the language preference directly from UserDefaults
         let langPref = userDefaults.integer(forKey: languagePreferenceKey)
         let useChineseText = AppLanguage.shouldUseChineseText(langPref)
+        let isSmallWidget = family == .systemSmall // Check if this is a small widget
         
         // Debug output - this will appear in the console when widget updates
         print("Widget language preference: \(langPref), useChineseText: \(useChineseText)")
@@ -440,7 +454,8 @@ struct TodayWidgetView: View {
                     .foregroundColor(.secondary)
                     .padding(.bottom, -4)
             } else {
-                Text("Today is:")
+                // For English, use shorter text in small widget
+                Text(isSmallWidget ? "Today" : "Today is")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     // Remove padding to match app styling
@@ -458,8 +473,8 @@ struct TodayWidgetView: View {
                             .foregroundColor(isWorkDay ? .red : .green)
                             .padding(.top, -3)
                         
-                        // Add holiday note if available
-                        if let holidayNote = entry.getSystemNote(for: entry.date) {
+                        // Add holiday note if available - but only in medium widget
+                        if let holidayNote = entry.getSystemNote(for: entry.date), !isSmallWidget {
                             Text(holidayNote)
                                 .font(.title3)
                                 .foregroundColor(.gray)
@@ -468,13 +483,16 @@ struct TodayWidgetView: View {
                 } else {
                     // Now make English layout match the app
                     HStack(alignment: .lastTextBaseline, spacing: 8) {
-                        Text(isWorkDay ? "Workday" : "Off day")
+                        // For English, use shorter text in small widget
+                        Text(isSmallWidget ? 
+                             (isWorkDay ? "Work" : "Off") : 
+                             (isWorkDay ? "Workday" : "Off day"))
                             .font(.largeTitle) // Update to match app
                             .fontWeight(.bold)
                             .foregroundColor(isWorkDay ? .red : .green)
                             
-                        // Add holiday note if available - same as Chinese version
-                        if let holidayNote = entry.getSystemNote(for: entry.date) {
+                        // Add holiday note if available - but only in medium widget
+                        if let holidayNote = entry.getSystemNote(for: entry.date), !isSmallWidget {
                             Text(holidayNote)
                                 .font(.title3)
                                 .foregroundColor(.gray)
@@ -484,14 +502,23 @@ struct TodayWidgetView: View {
                 
                 Spacer()
                 
-                // Match the circle size with the main app
-                Circle()
-                    .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
-                    .frame(width: 50, height: 50)
+                // Only show the circle if NOT in a small widget
+                if !isSmallWidget {
+                    Circle()
+                        .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
+                        .frame(width: 50, height: 50)
+                }
             }
             
-            if let note = entry.todayWorkDay?.note, !note.isEmpty {
+            if let note = entry.getNoteForDate(entry.date), !note.isEmpty {
                 Text(note)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .padding(.top, -5)
+            } else if isSmallWidget, let holidayNote = entry.getSystemNote(for: entry.date) {
+                // For small widgets, if no user note exists, show the holiday note as fallback
+                Text(holidayNote)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
