@@ -9,6 +9,8 @@ import SwiftUI
 import SwiftData
 import WidgetKit
 import UIKit  // Add UIKit import
+// Import the HolidayManager module
+import Foundation
 
 // Constants for app group synchronization
 let appGroupID = "group.io.azhe.WorkdayQ"
@@ -17,6 +19,7 @@ let languagePreferenceKey = "languagePreference"
 let customWorkTermKey = "customWorkTerm" // Add key for custom work term storage
 let appearancePreferenceKey = "appearancePreference" // Add key for dark mode preference
 let startOfWeekPreferenceKey = "startOfWeekPreference" // Add key for week start preference
+let showStatusOpacityDifferenceKey = "showStatusOpacityDifference" // Add key for opacity difference setting
 
 // Add extension to dismiss keyboard (place after imports, before constants)
 extension View {
@@ -95,19 +98,32 @@ struct ContentView: View {
     @AppStorage(customWorkTermKey) private var customWorkTerm = "上班" // Default work term
     @AppStorage(appearancePreferenceKey) private var appearancePreference = 0 // Default: system
     @AppStorage(startOfWeekPreferenceKey) private var startOfWeekPreference = 0 // Default: Sunday (0)
+    @AppStorage(showStatusOpacityDifferenceKey) private var showStatusOpacityDifference = true // Default: true
     @FocusState private var isCustomTermFieldFocused: Bool // Add focus state
+    
+    // Holiday-related state
+    @AppStorage(holidayPreferenceKey) private var holidayPreference = 0 // Default: none
+    @State private var isRefreshingHolidays = false
+    @State private var lastRefreshStatus: Bool? = nil
     
     // Add explicit app group UserDefaults access for direct writes
     private let sharedDefaults = UserDefaults(suiteName: appGroupID)
     
-    // Get the work status for a specific date, using stored data or default rules
+    // Get the work status for a specific date, using stored data, holiday data, or default rules
     func isWorkDay(forDate date: Date) -> Bool {
         let calendar = Calendar.current
-        // First check if we have an explicit record
+        
+        // First check if we have an explicit user record (highest priority)
         if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
             return explicitDay.isWorkDay
         }
-        // Fall back to default rules
+        
+        // Next check holiday data (medium priority)
+        if let holidayStatus = HolidayManager.shared.isWorkDay(for: date) {
+            return holidayStatus
+        }
+        
+        // Fall back to default rules (lowest priority)
         return isDefaultWorkDay(date)
     }
     
@@ -174,6 +190,7 @@ struct ContentView: View {
                     workDays: workDays,
                     languagePreference: languagePreference,
                     startOfWeekPreference: startOfWeekPreference,
+                    showStatusOpacityDifference: showStatusOpacityDifference,
                     onToggleWorkStatus: { date in
                         toggleWorkStatus(for: date)
                     },
@@ -480,6 +497,9 @@ struct ContentView: View {
             // Make sure start of week preference is also synced
             sharedDefaults.set(startOfWeekPreference, forKey: startOfWeekPreferenceKey)
             
+            // Make sure show status opacity difference preference is also synced
+            sharedDefaults.set(showStatusOpacityDifference, forKey: showStatusOpacityDifferenceKey)
+            
             // Force write
             sharedDefaults.synchronize()
             
@@ -594,6 +614,63 @@ struct ContentView: View {
                     }
                 }
                 
+                // Add new section for Holidays after Appearance section
+                Section(header: Text(localizedText("Holidays", chineseText: "节假日"))) {
+                    Picker(localizedText("Holiday Calendar", chineseText: "节假日日历"), selection: $holidayPreference) {
+                        ForEach(HolidayPreference.allCases) { preference in
+                            Text(localizedText(preference.localizedName.english, chineseText: preference.localizedName.chinese)).tag(preference.rawValue)
+                        }
+                    }
+                    .onChange(of: holidayPreference) { oldValue, newValue in
+                        if oldValue != newValue {
+                            // Update the holiday preference in HolidayManager
+                            HolidayManager.shared.setHolidayPreference(HolidayPreference(rawValue: newValue) ?? .none)
+                            
+                            // Force widgets to reload
+                            reloadWidgets()
+                        }
+                    }
+                    
+                    Button(action: {
+                        // Show loading indicator
+                        isRefreshingHolidays = true
+                        lastRefreshStatus = nil
+                        
+                        // Refresh holidays
+                        HolidayManager.shared.fetchHolidays { success in
+                            isRefreshingHolidays = false
+                            lastRefreshStatus = success
+                            
+                            // Force widgets to reload with new holiday data
+                            reloadWidgets()
+                        }
+                    }) {
+                        HStack {
+                            Text(localizedText("Refresh Holiday Data", chineseText: "刷新节假日数据"))
+                            
+                            Spacer()
+                            
+                            if isRefreshingHolidays {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                            } else if let status = lastRefreshStatus {
+                                Image(systemName: status ? "checkmark.circle" : "xmark.circle")
+                                    .foregroundColor(status ? .green : .red)
+                            }
+                        }
+                    }
+                    .disabled(holidayPreference == HolidayPreference.none.rawValue || isRefreshingHolidays)
+                    
+                    if let lastFetchTime = UserDefaults.standard.object(forKey: lastHolidayFetchKey) as? TimeInterval {
+                        HStack {
+                            Text(localizedText("Last Updated", chineseText: "上次更新"))
+                            Spacer()
+                            Text(Date(timeIntervalSince1970: lastFetchTime).formatted(date: .abbreviated, time: .shortened))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                
                 Section(header: Text(localizedText("Data", chineseText: "数据"))) {
                     Button(action: {
                         // Placeholder for backup functionality
@@ -684,6 +761,22 @@ struct ContentView: View {
                             }
                         }
                     }
+                    
+                    // Add new toggle for opacity differentiation
+                    Toggle(
+                        localizedText("Highlight user-edited days", chineseText: "突出显示用户编辑的日期"),
+                        isOn: $showStatusOpacityDifference
+                    )
+                    .onChange(of: showStatusOpacityDifference) { oldValue, newValue in
+                        // When toggled, sync to shared defaults and reload widgets
+                        syncOpacityDifferencePreference()
+                        reloadWidgets()
+                    }
+                    
+                    Text(localizedText("When on, days edited by you will appear more vibrant", 
+                         chineseText: "开启时，您编辑过的日期将更加鲜明"))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
             .navigationTitle(localizedText("Settings", chineseText: "设置"))
@@ -762,6 +855,20 @@ struct ContentView: View {
         sharedDefaults.synchronize() // Force immediate write
         
         print("Synced start of week preference to UserDefaults: \(startOfWeekPreference)")
+    }
+
+    // Add function to sync opacity difference preference to shared UserDefaults
+    private func syncOpacityDifferencePreference() {
+        guard let sharedDefaults = UserDefaults(suiteName: appGroupID) else {
+            print("Failed to access shared UserDefaults")
+            return
+        }
+        
+        // Set the opacity difference preference in shared UserDefaults
+        sharedDefaults.set(showStatusOpacityDifference, forKey: showStatusOpacityDifferenceKey)
+        sharedDefaults.synchronize() // Force immediate write
+        
+        print("Synced opacity difference preference to UserDefaults: \(showStatusOpacityDifference)")
     }
 }
 

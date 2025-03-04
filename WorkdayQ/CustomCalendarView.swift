@@ -25,6 +25,9 @@ struct CustomCalendarView: View {
     // Add start of week preference parameter
     var startOfWeekPreference: Int = 0
     
+    // Add show status opacity difference parameter
+    var showStatusOpacityDifference: Bool = true
+    
     // Add callbacks for actions
     var onToggleWorkStatus: ((Date) -> Void)?
     var onOpenNoteEditor: ((Date) -> Void)?
@@ -100,6 +103,12 @@ struct CustomCalendarView: View {
         }
         // Fall back to default rules
         return isDefaultWorkDay(date)
+    }
+    
+    // Add a new helper method to check if a day has been explicitly set by the user
+    private func isExplicitlySetByUser(_ date: Date) -> Bool {
+        let calendar = Calendar.current
+        return workDays.contains(where: { calendar.isDate($0.date, inSameDayAs: date) })
     }
     
     var body: some View {
@@ -417,70 +426,94 @@ struct CustomCalendarView: View {
         }
     }
     
-    // Original day view
+    // Day view with completely simplified structure
     @ViewBuilder
     private func dayView(for date: Date) -> some View {
         let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
         let isWorkDay = self.isWorkDay(date)
         let hasNote = dayHasNote(date)
         let day = Calendar.current.component(.day, from: date)
-        let circleColor = isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8)
+        let isUserSet = isExplicitlySetByUser(date)
         
+        // Determine opacity
+        let opacity = showStatusOpacityDifference ? (isUserSet ? 0.8 : 0.6) : 0.8
+        
+        // Get colors
+        let red = Color.red
+        let green = Color.green
+        
+        // Create the view with basic components
         ZStack {
-            if isToday {
-                // For today, create outlines aligned to the circle's center (half inside, half outside)
-                // Circle base - adjusted size to compensate for centered strokes
-                Circle()
-                    .fill(circleColor)
-                    .frame(width: 36, height: 36)
-                
-                // Outline - centered on path, not inside
-                // Use environment to detect dark mode
-                Circle()
-                    .stroke(Color(UIColor.systemBackground), lineWidth: 4.5)
-                    .frame(width: 36, height: 36)
-                
-                // Colored outline - centered on path, not inside
-                Circle()
-                    .stroke(circleColor, lineWidth: 1.5)
-                    .frame(width: 36, height: 36)
+            // Background circle
+            if isWorkDay {
+                if isToday {
+                    // Today's workday
+                    TodayCircleView(color: red, opacity: opacity)
+                } else {
+                    // Regular workday
+                    Circle()
+                        .fill(red.opacity(opacity))
+                        .frame(width: 36, height: 36)
+                }
             } else {
-                // Regular day - standard filled circle
-                Circle()
-                    .fill(circleColor)
-                    .frame(width: 36, height: 36)
+                if isToday {
+                    // Today's off day
+                    TodayCircleView(color: green, opacity: opacity)
+                } else {
+                    // Regular off day
+                    Circle()
+                        .fill(green.opacity(opacity))
+                        .frame(width: 36, height: 36)
+                }
             }
             
+            // Day number and note indicator
             VStack(spacing: 2) {
                 Text("\(day)")
                     .font(.callout)
                     .fontWeight(isToday ? .bold : .regular)
-                    .foregroundColor(.white) // Always white text for better contrast
+                    .foregroundColor(.white)
                 
-                // Add a small dot indicator when the day has a note
+                
+
                 if hasNote {
                     Circle()
                         .fill(Color.white)
                         .frame(width: 4, height: 4)
                 } else {
-                    // Empty spacer to maintain consistent layout
                     Spacer().frame(height: 4)
                 }
             }
         }
-        // Add tap gesture to toggle work status
+        .contentShape(Rectangle())
         .onTapGesture {
-            // First select the date (for internal tracking)
             selectedDate = date
-            // Then toggle the status
             onToggleWorkStatus?(date)
         }
-        // Add long press gesture to edit notes
         .onLongPressGesture {
-            // First select the date
             selectedDate = date
-            // Then open note editor
             onOpenNoteEditor?(date)
+        }
+    }
+    
+    // Helper view for today's circle with outline
+    private struct TodayCircleView: View {
+        let color: Color
+        let opacity: Double
+        var body: some View {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(opacity))
+                    .frame(width: 36, height: 36)
+                
+                Circle()
+                    .stroke(Color(UIColor.systemBackground), lineWidth: 4.5)
+                    .frame(width: 36, height: 36)
+                
+                Circle()
+                    .stroke(color.opacity(0.8), lineWidth: 1.5)
+                    .frame(width: 36, height: 36)
+            }
         }
     }
     

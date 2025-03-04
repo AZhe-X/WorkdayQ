@@ -16,6 +16,9 @@ let languagePreferenceKey = "languagePreference" // Add language preference key
 let customWorkTermKey = "customWorkTerm" // Add custom work term key
 let appearancePreferenceKey = "appearancePreference" // Add appearance preference key
 let startOfWeekPreferenceKey = "startOfWeekPreference" // Add start of week preference key
+let holidayPreferenceKey = "holidayPreference" // Add holiday preference key
+let holidayDataKey = "holidayData" // Add holiday data key
+let showStatusOpacityDifferenceKey = "showStatusOpacityDifference" // Add opacity difference setting key
 
 // Helper to determine if a date is a workday by default
 // (Monday-Friday = workday, Saturday-Sunday = off day)
@@ -101,6 +104,22 @@ struct Provider: TimelineProvider {
             print("Widget timeline generating for date: \(currentDate)")
             
             var workDays: [WorkDayStruct] = []
+            
+            // Load holiday preference and data
+            let holidayPref = sharedDefaults?.integer(forKey: holidayPreferenceKey) ?? 0
+            var holidayData: [HolidayInfo] = []
+            
+            if holidayPref != 0 { // If a holiday calendar is selected
+                if let holidayDataRaw = sharedDefaults?.data(forKey: holidayDataKey) {
+                    do {
+                        let decoder = JSONDecoder()
+                        holidayData = try decoder.decode([HolidayInfo].self, from: holidayDataRaw)
+                        print("Widget loaded \(holidayData.count) holiday items")
+                    } catch {
+                        print("Failed to decode holiday data in widget: \(error.localizedDescription)")
+                    }
+                }
+            }
             
             do {
                 // Create a more resilient model configuration
@@ -228,7 +247,8 @@ struct Provider: TimelineProvider {
                 workDays: workDays, 
                 lastUpdateTime: lastUpdate,
                 preferredColorScheme: preferredColorScheme,
-                startOfWeekPreference: startOfWeekPref
+                startOfWeekPreference: startOfWeekPref,
+                holidayData: holidayData
             )
             
             // Update refresh strategy based on context
@@ -258,14 +278,16 @@ struct DayEntry: TimelineEntry {
     let lastUpdateTime: TimeInterval  // Track when data was last updated
     let preferredColorScheme: ColorScheme?
     let startOfWeekPreference: Int // Sunday=0, Monday=1
+    let holidayData: [HolidayInfo] // Add holiday data
     
     // Use initializer with default parameters
-    init(date: Date, workDays: [WorkDayStruct], lastUpdateTime: TimeInterval, preferredColorScheme: ColorScheme? = nil, startOfWeekPreference: Int = 0) {
+    init(date: Date, workDays: [WorkDayStruct], lastUpdateTime: TimeInterval, preferredColorScheme: ColorScheme? = nil, startOfWeekPreference: Int = 0, holidayData: [HolidayInfo] = []) {
         self.date = date
         self.workDays = workDays
         self.lastUpdateTime = lastUpdateTime
         self.preferredColorScheme = preferredColorScheme
         self.startOfWeekPreference = startOfWeekPreference
+        self.holidayData = holidayData
     }
     
     var todayWorkDay: WorkDayStruct? {
@@ -308,12 +330,30 @@ struct DayEntry: TimelineEntry {
     // Check if a specific date is a workday, using stored data or default rules
     func isWorkDay(forDate date: Date) -> Bool {
         let calendar = Calendar.current
-        // First check if we have an explicit record
+        
+        // First check if we have an explicit user record (highest priority)
         if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
             return explicitDay.isWorkDay
         }
-        // Fall back to default rules
+        
+        // Next check holiday data (medium priority)
+        if let holidayInfo = holidayData.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            return holidayInfo.isWorkDay
+        }
+        
+        // Fall back to default rules (lowest priority)
         return isDefaultWorkDay(date)
+    }
+    
+    // Add function to get holiday information for a specific date
+    func getHolidayInfo(for date: Date) -> HolidayInfo? {
+        let calendar = Calendar.current
+        return holidayData.first { calendar.isDate($0.date, inSameDayAs: date) }
+    }
+    
+    // Add function to get system note for a date (holiday name)
+    func getSystemNote(for date: Date) -> String? {
+        return getHolidayInfo(for: date)?.name
     }
 }
 
@@ -862,4 +902,23 @@ private func loadWorkDaysFromUserDefaults() -> [WorkDayStruct]? {
     WeekOverviewWidget()
 } timeline: {
     DayEntry(date: Date(), workDays: createTestWorkDays(), lastUpdateTime: 0)
+}
+
+// Add HolidayInfo struct definition in the widget file
+struct HolidayInfo: Codable, Identifiable {
+    var id = UUID()
+    let date: Date
+    let name: String
+    let isWorkDay: Bool  // true for workday (调休 to work), false for rest day (holiday)
+    let type: HolidayType
+    
+    enum CodingKeys: String, CodingKey {
+        case date, name, isWorkDay, type
+    }
+}
+
+enum HolidayType: String, Codable {
+    case holiday = "holiday"      // Regular holiday (休)
+    case adjustedRest = "rest"    // Regular rest day (周末)
+    case adjustedWork = "work"    // Adjusted workday (调休 to work - 班)
 }

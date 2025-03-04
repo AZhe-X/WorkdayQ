@@ -14,6 +14,31 @@ WorkdayQ is an iOS app that helps you track your work days and off days. It prov
 1. **Today Widget** (Small): Shows today's date and work status
 2. **Weekly Widget** (Medium): Shows today, tomorrow, and the next 5 days with their work status
 
+## How WorkdayQ Determines Work Days
+
+WorkdayQ uses a three-tiered system to determine whether a day is a work day or an off day:
+
+1. **User-Edited Data** (Highest Priority)
+   - Stored in SwiftData as explicit `WorkDay` records
+   - Options: not set (no record exists), workday (isWorkDay = true), or off day (isWorkDay = false)
+   - Created when a user manually sets a day's status or adds a note
+   - Always takes precedence over holiday data and default rules
+
+2. **Holiday Data** (Medium Priority)
+   - Managed by `HolidayManager` and stored in UserDefaults
+   - Downloaded from calendar services based on user preference (Chinese Holidays or US Federal Holidays)
+   - Options: not set (nil), workday (true), or off day (false)
+   - Includes both regular holidays (off days) and special work days (e.g., "makeup" work days for extended holidays)
+   - Only used if no user-edited record exists for a date
+
+3. **Default Rules** (Lowest Priority)
+   - Calculated on demand using the `isDefaultWorkDay()` function
+   - Not stored as data but determined by calendar logic
+   - Monday-Friday are considered work days, Saturday-Sunday are off days
+   - Only applied when neither user-edited data nor holiday data exists for a date
+
+This tiered approach ensures that user preferences always take precedence, while still providing helpful defaults and holiday awareness.
+
 ## Technical Details
 
 The app is built using:
