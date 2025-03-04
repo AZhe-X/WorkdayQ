@@ -101,6 +101,12 @@ struct CustomCalendarView: View {
         if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
             return explicitDay.isWorkDay
         }
+        
+        // Next check holiday data (medium priority)
+        if let holidayStatus = HolidayManager.shared.isWorkDay(for: date) {
+            return holidayStatus
+        }
+        
         // Fall back to default rules
         return isDefaultWorkDay(date)
     }
@@ -431,7 +437,8 @@ struct CustomCalendarView: View {
     private func dayView(for date: Date) -> some View {
         let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
         let isWorkDay = self.isWorkDay(date)
-        let hasNote = dayHasNote(date)
+        let hasUserNote = dayHasNote(date)
+        let hasSystemNote = HolidayManager.shared.getSystemNote(for: date) != nil
         let day = Calendar.current.component(.day, from: date)
         let isUserSet = isExplicitlySetByUser(date)
         
@@ -473,15 +480,14 @@ struct CustomCalendarView: View {
                     .font(.callout)
                     .fontWeight(isToday ? .bold : .regular)
                     .foregroundColor(.white)
-                
-                
-
-                if hasNote {
+                ZStack {
                     Circle()
-                        .fill(Color.white)
-                        .frame(width: 4, height: 4)
-                } else {
-                    Spacer().frame(height: 4)
+                        .stroke(Color(UIColor.systemBackground).opacity(hasSystemNote ? 1 : 0), lineWidth: 1)
+                        .frame(width: 5, height: 5)
+
+                    Circle()
+                        .fill(Color.white.opacity(hasUserNote ? 1 : 0))
+                        .frame(width: 3, height: 3)
                 }
             }
         }
