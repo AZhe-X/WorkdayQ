@@ -589,6 +589,15 @@ struct WeekWidgetView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 4)
                     .padding(.leading, 10) // Add left padding
+            } else {
+                    Text(customizeWorkTerm("Working these days?"))
+                    .font(.headline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.secondary) // Make text gray
+                    .frame(maxWidth: .infinity, alignment: .leading) // Align to left
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                    .padding(.leading, 10) // Add left padding
             }
             
             Spacer() // Push content to bottom
