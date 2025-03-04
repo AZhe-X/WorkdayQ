@@ -266,7 +266,8 @@ class HolidayManager {
             // Process work day events
             print("\n🔍 Processing work day events:")
             for event in workDayEvents {
-                if let holiday = extractHoliday(from: event, isWorkDay: true) {
+                let workDayHolidays = extractHoliday(from: event, isWorkDay: true)
+                for holiday in workDayHolidays {
                     print("🟥 Added work day: \(holiday.date) - \(holiday.name)")
                     holidays.append(holiday)
                 }
@@ -275,7 +276,8 @@ class HolidayManager {
             // Process rest day events
             print("\n🔍 Processing rest day events:")
             for event in restDayEvents {
-                if let holiday = extractHoliday(from: event, isWorkDay: false) {
+                let restDayHolidays = extractHoliday(from: event, isWorkDay: false)
+                for holiday in restDayHolidays {
                     print("🟩 Added rest day: \(holiday.date) - \(holiday.name)")
                     holidays.append(holiday)
                 }
@@ -283,7 +285,8 @@ class HolidayManager {
         } else {
             // For US holidays, all are rest days
             for event in events.dropFirst() {
-                if let holiday = extractHoliday(from: event, isWorkDay: false) {
+                let usHolidays = extractHoliday(from: event, isWorkDay: false)
+                for holiday in usHolidays {
                     print("🟩 Added US holiday (rest day): \(holiday.date) - \(holiday.name)")
                     holidays.append(holiday)
                 }
@@ -295,28 +298,49 @@ class HolidayManager {
     }
     
     // Helper function to extract a holiday from an event string
-    private func extractHoliday(from event: String, isWorkDay: Bool) -> HolidayInfo? {
+    private func extractHoliday(from event: String, isWorkDay: Bool) -> [HolidayInfo] {
         print("📝 Extracting holiday info, isWorkDay: \(isWorkDay)")
         
-        // Extract date
-        var date: Date?
+        var holidays: [HolidayInfo] = []
+        
+        // Extract start date
+        var startDate: Date?
         if let dateRange = event.range(of: "DTSTART;VALUE=DATE:") {
             let startIndex = dateRange.upperBound
             let endIndex = event.index(startIndex, offsetBy: 8) // Date format: YYYYMMDD
             let dateString = String(event[startIndex..<endIndex])
-            print("   Found date string: \(dateString)")
+            print("   Found start date string: \(dateString)")
             
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyyMMdd"
-            date = formatter.date(from: dateString)
+            startDate = formatter.date(from: dateString)
             
-            if let validDate = date {
-                print("   Parsed date: \(validDate)")
+            if let validDate = startDate {
+                print("   Parsed start date: \(validDate)")
             } else {
-                print("❌ Failed to parse date from string: \(dateString)")
+                print("❌ Failed to parse start date from string: \(dateString)")
             }
         } else {
             print("❌ No DTSTART;VALUE=DATE: found in event")
+        }
+        
+        // Extract end date if present
+        var endDate: Date?
+        if let dateRange = event.range(of: "DTEND;VALUE=DATE:") {
+            let startIndex = dateRange.upperBound
+            let endIndex = event.index(startIndex, offsetBy: 8) // Date format: YYYYMMDD
+            let dateString = String(event[startIndex..<endIndex])
+            print("   Found end date string: \(dateString)")
+            
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyyMMdd"
+            endDate = formatter.date(from: dateString)
+            
+            if let validDate = endDate {
+                print("   Parsed end date: \(validDate)")
+            } else {
+                print("❌ Failed to parse end date from string: \(dateString)")
+            }
         }
         
         // Extract summary/name - handle both formats
@@ -381,19 +405,49 @@ class HolidayManager {
         }
         
         // Skip if no date or name
-        guard let validDate = date, !name.isEmpty else {
-            print("❌ Skipping event due to missing date or name")
-            return nil
+        guard let validStartDate = startDate, !name.isEmpty else {
+            print("❌ Skipping event due to missing start date or name")
+            return []
         }
         
-        // Create and return the holiday info
-        print("✅ Successfully created holiday: \(validDate) - \(name)")
-        return HolidayInfo(
-            date: validDate,
-            name: name,
-            isWorkDay: isWorkDay,
-            type: isWorkDay ? .adjustedWork : .holiday
-        )
+        // If no end date or same as start date, create a single holiday entry
+        if endDate == nil || Calendar.current.isDate(validStartDate, inSameDayAs: endDate!) {
+            let holiday = HolidayInfo(
+                date: validStartDate,
+                name: name,
+                isWorkDay: isWorkDay,
+                type: isWorkDay ? .adjustedWork : .holiday
+            )
+            print("✅ Created single-day holiday: \(validStartDate) - \(name)")
+            holidays.append(holiday)
+        } else {
+            // For multi-day events, create an entry for each day in the range
+            // DTEND in iCalendar spec is exclusive, so we go up to but not including the end date
+            print("📅 Processing multi-day holiday from \(validStartDate) to \(endDate!)")
+            
+            var currentDate = validStartDate
+            let calendar = Calendar.current
+            
+            while currentDate < endDate! {
+                let holiday = HolidayInfo(
+                    date: currentDate,
+                    name: name,
+                    isWorkDay: isWorkDay,
+                    type: isWorkDay ? .adjustedWork : .holiday
+                )
+                print("  ✅ Added day to multi-day holiday: \(currentDate) - \(name)")
+                holidays.append(holiday)
+                
+                // Move to next day
+                if let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) {
+                    currentDate = nextDate
+                } else {
+                    break // Prevent infinite loop if date addition fails
+                }
+            }
+        }
+        
+        return holidays
     }
     
     // Save holidays to UserDefaults

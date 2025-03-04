@@ -301,7 +301,7 @@ struct ContentView: View {
                     .foregroundColor(.secondary)
                     .padding(.bottom, -4)
             } else {
-                Text(localizedText("Today is:", chineseText: "今天是:"))
+                Text(localizedText("Today is", chineseText: "今天是"))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }
