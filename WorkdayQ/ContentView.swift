@@ -315,17 +315,23 @@ struct ContentView: View {
             Text(dateFormatter.string(from: Date()))
                 .font(.headline)
                 .padding(.bottom, 4)
+                 .padding(.top, 4)
+            
+             Spacer()
             
             // Show "Today is:" or "今天" based on language
             if languagePreference == AppLanguage.chinese.rawValue {
                 Text("今天")
                     .font(.title3)
                     .foregroundColor(.secondary)
-                    .padding(.bottom, -4)
+                    .padding(.bottom, -6)
+                    .fontWeight(.semibold)
             } else {
                 Text(localizedText("Today is", chineseText: "今天是"))
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                    .padding(.bottom, -6)
+                    .fontWeight(.semibold)
             }
             
             HStack {
@@ -370,6 +376,7 @@ struct ContentView: View {
                 Circle()
                     .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
                     .frame(width: 50, height: 50)
+                    .padding(.bottom, 1)
             }
             
             if let note = todayWorkDay?.note, !note.isEmpty {
@@ -380,7 +387,7 @@ struct ContentView: View {
                     .padding(.top, -5)
             }
         }
-        .padding(.horizontal, 28)
+        .padding(.horizontal, 20)
         .padding(.vertical, 16)
         .frame(height: 155)
         .frame(maxWidth: .infinity)
@@ -649,60 +656,8 @@ struct ContentView: View {
     var settingsView: some View {
         NavigationStack {
             List {
-                Section(header: Text(localizedText("Language", chineseText: "语言"))) {
-                    Picker(localizedText("App Language", chineseText: "应用语言"), selection: $languagePreference) {
-                        ForEach(AppLanguage.allCases) { language in
-                            Text(language.displayName).tag(language.rawValue)
-                        }
-                    }
-                    .onChange(of: languagePreference) { oldValue, newValue in
-                        if oldValue != newValue {
-                            // Show alert about needing to restart
-                            // In a real implementation, we might actually restart the app
-                            // or apply the language change immediately
-                            print("Language changed to: \(AppLanguage(rawValue: newValue)?.displayName ?? "Unknown")")
-                            // Ensure we sync this change to the shared UserDefaults
-                            syncLanguagePreference()
-                            // Force widgets to reload
-                            reloadWidgets()
-                        }
-                    }
-                    
-                    if languagePreference != AppLanguage.systemDefault.rawValue {
-                        Button(localizedText("Reset to System Default", chineseText: "重置为系统默认设置")) {
-                            languagePreference = AppLanguage.systemDefault.rawValue
-                        }
-                        .foregroundColor(.blue)
-                    }
-                }
-                
-                Section(header: Text(localizedText("Appearance", chineseText: "外观"))) {
-                    Picker(localizedText("Appearance Mode", chineseText: "外观模式"), selection: $appearancePreference) {
-                        Text(localizedText("System", chineseText: "跟随系统")).tag(AppAppearance.systemDefault.rawValue)
-                        Text(localizedText("Light", chineseText: "浅色模式")).tag(AppAppearance.light.rawValue)
-                        Text(localizedText("Dark", chineseText: "深色模式")).tag(AppAppearance.dark.rawValue)
-                    }
-                    .pickerStyle(.segmented)
-                    .onChange(of: appearancePreference) { oldValue, newValue in
-                        // Sync the appearance preference to UserDefaults for widget access
-                        syncAppearancePreference()
-                        // Force widgets to reload with new appearance
-                        reloadWidgets()
-                    }
-                    
-                    Picker(localizedText("Start of Week", chineseText: "每周开始日"), selection: $startOfWeekPreference) {
-                        Text(localizedText("Sunday", chineseText: "周日")).tag(0)
-                        Text(localizedText("Monday", chineseText: "周一")).tag(1)
-                    }
-                    .onChange(of: startOfWeekPreference) { oldValue, newValue in
-                        // Sync the start of week preference to UserDefaults for widget access
-                        syncStartOfWeekPreference()
-                        // Force widgets to reload with new start of week
-                        reloadWidgets()
-                    }
-                }
-                
-                // Add new section for Holidays after Appearance section
+
+                // holidays Sync Settings
                 Section(header: Text(localizedText("Holidays", chineseText: "节假日"))) {
                     Picker(localizedText("Holiday Calendar", chineseText: "节假日日历"), selection: $holidayPreference) {
                         ForEach(HolidayPreference.allCases) { preference in
@@ -758,35 +713,8 @@ struct ContentView: View {
                         }
                     }
                 }
-                
-                Section(header: Text(localizedText("Data", chineseText: "数据"))) {
-                    Button(action: {
-                        // Placeholder for backup functionality
-                    }) {
-                        Label(localizedText("Backup Data", chineseText: "备份数据"), systemImage: "arrow.down.doc")
-                    }
-                    
-                    Button(action: {
-                        // Placeholder for restore functionality
-                    }) {
-                        Label(localizedText("Restore Data", chineseText: "恢复数据"), systemImage: "arrow.up.doc")
-                    }
-                }
-                
-                Section(header: Text(localizedText("About", chineseText: "关于"))) {
-                    HStack {
-                        Text(localizedText("Version", chineseText: "版本"))
-                        Spacer()
-                        Text("1.0.0")
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Link(destination: URL(string: "https://example.com/privacy")!) {
-                        Label(localizedText("Privacy Policy", chineseText: "隐私政策"), systemImage: "lock.shield")
-                    }
-                }
-                
-                // Add new section for customizing Chinese work term
+
+                // Customization Settings
                 Section(header: Text(localizedText("Customization", chineseText: "自定义"))) {
                     ZStack {
                         Color.clear
@@ -852,7 +780,7 @@ struct ContentView: View {
                     
                     // Add new toggle for opacity differentiation
                     Toggle(
-                        localizedText("Highlight user-edited days", chineseText: "突出显示用户编辑的日期"),
+                        localizedText("Highlight user-edited days", chineseText: "高亮自定义日期"),
                         isOn: $showStatusOpacityDifference
                     )
                     .onChange(of: showStatusOpacityDifference) { oldValue, newValue in
@@ -862,10 +790,100 @@ struct ContentView: View {
                     }
                     
                     Text(localizedText("When on, days edited by you will appear more vibrant", 
-                         chineseText: "开启时，您编辑过的日期将更加鲜明"))
+                         chineseText: "开启时，自定义日期将会更明显。"))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
+
+                // Appearance Settings
+
+                Section(header: Text(localizedText("Appearance", chineseText: "外观"))) {
+                    Picker(localizedText("Appearance Mode", chineseText: "外观模式"), selection: $appearancePreference) {
+                        Text(localizedText("System", chineseText: "跟随系统")).tag(AppAppearance.systemDefault.rawValue)
+                        Text(localizedText("Light", chineseText: "浅色模式")).tag(AppAppearance.light.rawValue)
+                        Text(localizedText("Dark", chineseText: "深色模式")).tag(AppAppearance.dark.rawValue)
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: appearancePreference) { oldValue, newValue in
+                        // Sync the appearance preference to UserDefaults for widget access
+                        syncAppearancePreference()
+                        // Force widgets to reload with new appearance
+                        reloadWidgets()
+                    }
+                    
+                    Picker(localizedText("Start of Week", chineseText: "每周开始日"), selection: $startOfWeekPreference) {
+                        Text(localizedText("Sunday", chineseText: "周日")).tag(0)
+                        Text(localizedText("Monday", chineseText: "周一")).tag(1)
+                    }
+                    .onChange(of: startOfWeekPreference) { oldValue, newValue in
+                        // Sync the start of week preference to UserDefaults for widget access
+                        syncStartOfWeekPreference()
+                        // Force widgets to reload with new start of week
+                        reloadWidgets()
+                    }
+                }
+
+                // Language Settings
+                Section(header: Text(localizedText("Language", chineseText: "语言"))) {
+                    Picker(localizedText("App Language", chineseText: "应用语言"), selection: $languagePreference) {
+                        ForEach(AppLanguage.allCases) { language in
+                            Text(language.displayName).tag(language.rawValue)
+                        }
+                    }
+                    .onChange(of: languagePreference) { oldValue, newValue in
+                        if oldValue != newValue {
+                            // Show alert about needing to restart
+                            // In a real implementation, we might actually restart the app
+                            // or apply the language change immediately
+                            print("Language changed to: \(AppLanguage(rawValue: newValue)?.displayName ?? "Unknown")")
+                            // Ensure we sync this change to the shared UserDefaults
+                            syncLanguagePreference()
+                            // Force widgets to reload
+                            reloadWidgets()
+                        }
+                    }
+                    
+                    if languagePreference != AppLanguage.systemDefault.rawValue {
+                        Button(localizedText("Reset to System Default", chineseText: "重置为系统默认设置")) {
+                            languagePreference = AppLanguage.systemDefault.rawValue
+                        }
+                        .foregroundColor(.blue)
+                    }
+                }
+                
+                
+                
+                
+                
+                
+                Section(header: Text(localizedText("Data", chineseText: "数据"))) {
+                    Button(action: {
+                        // Placeholder for backup functionality
+                    }) {
+                        Label(localizedText("Backup Data", chineseText: "备份数据"), systemImage: "arrow.down.doc")
+                    }
+                    
+                    Button(action: {
+                        // Placeholder for restore functionality
+                    }) {
+                        Label(localizedText("Restore Data", chineseText: "恢复数据"), systemImage: "arrow.up.doc")
+                    }
+                }
+                
+                Section(header: Text(localizedText("About", chineseText: "关于"))) {
+                    HStack {
+                        Text(localizedText("Version", chineseText: "版本"))
+                        Spacer()
+                        Text("1.0.0")
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Link(destination: URL(string: "https://example.com/privacy")!) {
+                        Label(localizedText("Privacy Policy", chineseText: "隐私政策"), systemImage: "lock.shield")
+                    }
+                }
+                
+                
             }
             .navigationTitle(localizedText("Settings", chineseText: "设置"))
             .navigationBarTitleDisplayMode(.inline)

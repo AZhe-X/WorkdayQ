@@ -446,32 +446,38 @@ struct TodayWidgetView: View {
             Text(dateFormatter.string(from: entry.date))
                 .font(.headline)
                 .padding(.bottom, 4)
+                .padding(.top, 4)
+            Spacer()
             
             // Use Chinese format or English format based on language preference
             if useChineseText {
                 Text("今天")
                     .font(.title3)
                     .foregroundColor(.secondary)
-                    .padding(.bottom, -4)
+                    .padding(.bottom, -6)
+                    .fontWeight(.semibold)
             } else {
                 // For English, use shorter text in small widget
                 Text(isSmallWidget ? "Today" : "Today is")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                    .padding(.bottom, -6)
+                    .fontWeight(.semibold)
                     // Remove padding to match app styling
             }
+            
             
             HStack {
                 let isWorkDay = entry.isTodayWorkDay
                 
                 // Use different text format for Chinese
                 if useChineseText {
-                    HStack(alignment: .lastTextBaseline, spacing: 8) {
+                    HStack(alignment: .lastTextBaseline, spacing: 16) {
                         Text(customizeWorkTerm(isWorkDay ? "要上班" : "不上班"))
                             .font(.largeTitle)
                             .fontWeight(.bold)
                             .foregroundColor(isWorkDay ? .red : .green)
-                            .padding(.top, -3)
+                            .padding(.top, 0)
                         
                         // Add holiday note if available - but only in medium widget
                         if let holidayNote = entry.getSystemNote(for: entry.date), !isSmallWidget {
@@ -482,7 +488,7 @@ struct TodayWidgetView: View {
                     }
                 } else {
                     // Now make English layout match the app
-                    HStack(alignment: .lastTextBaseline, spacing: 8) {
+                    HStack(alignment: .lastTextBaseline, spacing: 16) {
                         // For English, use shorter text in small widget
                         Text(isSmallWidget ? 
                              (isWorkDay ? "Work" : "Off") : 
@@ -507,6 +513,7 @@ struct TodayWidgetView: View {
                     Circle()
                         .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
                         .frame(width: 50, height: 50)
+                        .padding(.bottom, 2)
                 }
             }
             
@@ -523,9 +530,10 @@ struct TodayWidgetView: View {
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .padding(.top, -5)
-            }
+            } 
+          
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, 6)
         .padding(.vertical, 16)
         .frame(height: 155)
         .frame(maxWidth: .infinity)
@@ -654,7 +662,7 @@ struct WeekWidgetView: View {
             }
         }
         .frame(height: isLarge ? 80 : 70) // Fixed height for better alignment
-        .padding(.horizontal, 2)
+        .padding(.horizontal, 4)
         .background(
             Group {
                 if isToday {
@@ -701,24 +709,25 @@ struct SmallWeekWidgetView: View {
         
         return VStack(spacing: 0) {
             // Add the title at the top - only show in Chinese
-            if useChineseText {
-                Text(customizeWorkTerm("这几天上班吗？"))
-                    .font(.headline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.secondary) // Make text gray
-                    .frame(maxWidth: .infinity, alignment: .leading) // Align to left
-                    .padding(.top, 8)
-                    .padding(.bottom, 4)
-                    .padding(.leading, 10) // Add left padding
-            }
+            // if useChineseText {
+            //     Text(customizeWorkTerm("上班吗？"))
+            //         .font(.headline)
+            //         .fontWeight(.medium)
+            //         .foregroundColor(.secondary) // Make text gray
+            //         .frame(maxWidth: .infinity, alignment: .leading) // Align to left
+            //         .padding(.top, 8)
+            //         .padding(.bottom, 4)
+            //         .padding(.leading, 10) // Add left padding
+            // }
             
             Spacer() // Push content to bottom
             
-            HStack(alignment: .bottom, spacing: 4) {
+            HStack(alignment: .center, spacing: -20) { // Changed alignment from .bottom to .center
                 // Today and tomorrow only
                 ForEach(0...1, id: \.self) { offset in
                     dayView(offset: offset, useChineseText: useChineseText)
                         .frame(maxWidth: .infinity)
+                        .offset(y: offset == 0 ? -60 : 0) // Apply negative offset to Today to position it higher
                 }
             }
             .padding(.horizontal, 12)
@@ -756,35 +765,40 @@ struct SmallWeekWidgetView: View {
         
         let isToday = offset == 0
         
-        return VStack(spacing: 8) {
-            Text(dayName)
-                .font(.system(size: 14))
-                .fontWeight(.medium)
-                .foregroundColor(isToday ? .primary : .secondary)
+        // Set sizes based on whether it's today or tomorrow
+        let circleSize: CGFloat = isToday ? 90 : 60
+        let fontSize: CGFloat = isToday ? 50 : 30
+        let fontWeight: Font.Weight = isToday ? .light : .regular
+
+        return VStack(spacing: 0) {
+            // Text(dayName)
+            //     .font(.system(size: isToday ? 14 : 13))
+            //     .fontWeight(.medium)
+            //     .foregroundColor(isToday ? .primary : .secondary)
             
             ZStack {
                 Circle()
                     .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
-                    .frame(width: 50, height: 50)
+                    .frame(width: circleSize, height: circleSize)
                 
                 Text("\(dayNum)")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.system(size: fontSize, weight: .light))
                     .foregroundColor(.white)
             }
         }
-        .frame(height: 90) // Fixed height for better alignment
+        .frame(height: 30) // Fixed height for better alignment
         .padding(.horizontal, 2)
-        .background(
-            Group {
-                if isToday {
-                    Rectangle()
-                        .fill(Color(UIColor.systemGray6))
-                        .cornerRadius(8)
-                } else {
-                    Color.clear
-                }
-            }
-        )
+        // .background(
+        //     Group {
+        //         if isToday {
+        //             Rectangle()
+        //                 .fill(Color(UIColor.systemGray6))
+        //                 .cornerRadius(8)
+        //         } else {
+        //             Color.clear
+        //         }
+        //     }
+        // )
     }
 }
 
