@@ -88,6 +88,7 @@ enum AppAppearance: Int, CaseIterable, Identifiable {
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @Query private var workDays: [WorkDay]
     
     @State private var selectedDate: Date = Date()
@@ -260,6 +261,9 @@ struct ContentView: View {
                     .presentationDragIndicator(.visible)
             }
             .onAppear {
+                // Always update selectedDate to today when view appears
+                selectedDate = Date()
+                
                 checkAndCreateTodayEntry()
                 // Always reload widget when view appears
                 reloadWidgets()
@@ -283,6 +287,22 @@ struct ContentView: View {
             .onChange(of: workDays) { _, _ in
                 // Reload widgets when workdays change 
                 reloadWidgets()
+            }
+            // Add scene phase monitoring to refresh date when app becomes active
+            .onChange(of: scenePhase) { oldPhase, newPhase in
+                if newPhase == .active {
+                    print("ContentView: App became active - refreshing data")
+                    // Reset selected date to today in case date changed while app was inactive
+                    let calendar = Calendar.current
+                    if !calendar.isDateInToday(selectedDate) {
+                        print("Date changed since last active - updating to today")
+                        selectedDate = Date()
+                    }
+                    
+                    // Refresh our data
+                    checkAndCreateTodayEntry()
+                    reloadWidgets()
+                }
             }
             // Apply the preferred color scheme
             .preferredColorScheme(AppAppearance(rawValue: appearancePreference)?.colorScheme)

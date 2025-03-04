@@ -11,6 +11,8 @@ import WidgetKit
 
 @main
 struct WorkdayQApp: App {
+    @Environment(\.scenePhase) private var scenePhase
+    
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             WorkDay.self,
@@ -46,5 +48,17 @@ struct WorkdayQApp: App {
             ContentView()
         }
         .modelContainer(sharedModelContainer)
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                print("App became active - refreshing data")
+                // Update lastDatabaseUpdate timestamp to trigger widget refresh
+                if let sharedDefaults = UserDefaults(suiteName: "group.io.azhe.WorkdayQ") {
+                    sharedDefaults.set(Date().timeIntervalSince1970, forKey: "lastDatabaseUpdate")
+                    
+                    // Also notify widgets to refresh
+                    WidgetCenter.shared.reloadAllTimelines()
+                }
+            }
+        }
     }
 }
