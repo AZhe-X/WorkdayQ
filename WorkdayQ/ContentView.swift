@@ -326,12 +326,22 @@ struct ContentView: View {
                         }
                     }
                 } else {
-                    Text(isWorkDay ? 
-                         localizedText("Workday", chineseText: "工作日") : 
-                         localizedText("Off day", chineseText: "休息日"))
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(isWorkDay ? .red : .green)
+                    // Now make English layout match Chinese layout
+                    HStack(alignment: .lastTextBaseline, spacing: 8) {
+                        Text(isWorkDay ? 
+                             localizedText("Workday", chineseText: "工作日") : 
+                             localizedText("Off day", chineseText: "休息日"))
+                            .font(.largeTitle) // Changed from .title2 to match Chinese
+                            .fontWeight(.bold)
+                            .foregroundColor(isWorkDay ? .red : .green)
+                        
+                        // Add holiday note if available - same as Chinese version
+                        if let holidayNote = HolidayManager.shared.getSystemNote(for: Date()) {
+                            Text(holidayNote)
+                                .font(.title3)
+                                .foregroundColor(.gray)
+                        }
+                    }
                 }
                 
                 Spacer()

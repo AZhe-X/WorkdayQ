@@ -451,17 +451,35 @@ struct TodayWidgetView: View {
                 
                 // Use different text format for Chinese
                 if useChineseText {
-                    Text(customizeWorkTerm(isWorkDay ? "要上班" : "不上班"))
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(isWorkDay ? .red : .green)
-                        .padding(.top, -3)
+                    HStack(alignment: .lastTextBaseline, spacing: 8) {
+                        Text(customizeWorkTerm(isWorkDay ? "要上班" : "不上班"))
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundColor(isWorkDay ? .red : .green)
+                            .padding(.top, -3)
+                        
+                        // Add holiday note if available
+                        if let holidayNote = entry.getSystemNote(for: entry.date) {
+                            Text(holidayNote)
+                                .font(.title3)
+                                .foregroundColor(.gray)
+                        }
+                    }
                 } else {
-                    Text(isWorkDay ? "Workday" : "Off day")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(isWorkDay ? .red : .green)
-                        // Remove minimumScaleFactor to match app styling
+                    // Now make English layout match the app
+                    HStack(alignment: .lastTextBaseline, spacing: 8) {
+                        Text(isWorkDay ? "Workday" : "Off day")
+                            .font(.largeTitle) // Update to match app
+                            .fontWeight(.bold)
+                            .foregroundColor(isWorkDay ? .red : .green)
+                            
+                        // Add holiday note if available - same as Chinese version
+                        if let holidayNote = entry.getSystemNote(for: entry.date) {
+                            Text(holidayNote)
+                                .font(.title3)
+                                .foregroundColor(.gray)
+                        }
+                    }
                 }
                 
                 Spacer()
@@ -476,8 +494,8 @@ struct TodayWidgetView: View {
                 Text(note)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                    .lineLimit(2)
-                    .padding(.top, 4)
+                    .lineLimit(1)
+                    .padding(.top, -5)
             }
         }
         .padding(.horizontal, 10)
