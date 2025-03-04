@@ -89,6 +89,7 @@ enum AppAppearance: Int, CaseIterable, Identifiable {
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.colorScheme) private var systemColorScheme // Add system color scheme environment
     @Query private var workDays: [WorkDay]
     
     @State private var selectedDate: Date = Date()
@@ -386,9 +387,25 @@ struct ContentView: View {
         .background(
             RoundedRectangle(cornerRadius: 20) // iOS widget corner radius
                 .fill(
-                    AppAppearance(rawValue: appearancePreference)?.colorScheme == .dark 
-                    ? Color(red: 0.11, green: 0.11, blue: 0.12) // iOS native dark background color
-                    : Color.white
+                    // Determine background color based on appearance mode
+                    {
+                        let appearance = AppAppearance(rawValue: appearancePreference)
+                        
+                        // If explicitly set to light mode
+                        if appearance?.colorScheme == .light {
+                            return Color.white
+                        }
+                        // If explicitly set to dark mode
+                        else if appearance?.colorScheme == .dark {
+                            return Color(red: 0.11, green: 0.11, blue: 0.12)
+                        }
+                        // If following system (appearance?.colorScheme is nil)
+                        else {
+                            return systemColorScheme == .light ? 
+                                Color.white : 
+                                Color(red: 0.11, green: 0.11, blue: 0.12)
+                        }
+                    }()
                 )
                 .shadow(color: Color(UIColor { traitCollection in
                     traitCollection.userInterfaceStyle == .dark ? .black : .black
