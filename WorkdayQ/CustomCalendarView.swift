@@ -2,227 +2,74 @@
 //  CustomCalendarView.swift
 //  WorkdayQ
 //
+//  A simplified calendar view that shows only day mode. The user can navigate
+//  between months with < and >, but there is no separate month-picking screen.
+//
 
 import SwiftUI
 
-// Move enums outside of the struct to make them accessible
+// Simple direction enum, in case we ever want to track left/right. 
+// Currently, we do not animate transitions.
 enum SlideDirection {
     case none, left, right
 }
 
-enum CalendarViewMode {
-    case days, months
-}
-
+// CustomCalendarView: a simplified calendar for showing days only
 struct CustomCalendarView: View {
     @Binding var selectedDate: Date
     let workDays: [WorkDay]
     @Environment(\.modelContext) private var modelContext
     
-    // Add a language preference parameter
+    // Language preference, start-of-week, and status opacity difference
     var languagePreference: Int = 0
-    
-    // Add start of week preference parameter
     var startOfWeekPreference: Int = 0
-    
-    // Add show status opacity difference parameter
     var showStatusOpacityDifference: Bool = true
     
-    // Add callbacks for actions
+    // Callbacks for toggling (tap) and editing notes (long press)
     var onToggleWorkStatus: ((Date) -> Void)?
     var onOpenNoteEditor: ((Date) -> Void)?
     
+    // Internal state for updating the displayed month
     @State private var currentMonth = Date()
-    @State private var slideDirection: SlideDirection = .none
-    @State private var yearSlideDirection: SlideDirection = .none // For year navigation
     
-    // State for hierarchical date selection (simplified)
-    @State private var calendarViewMode: CalendarViewMode = .days
-    
-    // Fixed sizes to prevent layout shifts - ensure both views are identical height
+    // Calendar layout constants
     private let calendarGridHeight: CGFloat = 300
-    private let dayHeight: CGFloat = 42 // Fixed height for each day
-    private let rowSpacing: CGFloat = 8 // Fixed spacing between rows
-    
-    // Helper to get localized day names based on language preference
-    private var localizedWeekdaySymbols: [String] {
-        let language = AppLanguage(rawValue: languagePreference) ?? .systemDefault
-        let calendar = Calendar.current
-        
-        if language == .chinese {
-            // Chinese weekday symbols
-            let chineseSymbols = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
-            
-            // Re-order based on start of week preference
-            if startOfWeekPreference == 1 { // Monday start
-                // Move Sunday to the end
-                var mondayFirstSymbols = Array(chineseSymbols[1...]) // Monday to Saturday
-                mondayFirstSymbols.append(chineseSymbols[0]) // Add Sunday at the end
-                return mondayFirstSymbols
-            } else {
-                // Default Sunday start
-                return chineseSymbols
-            }
-        } else {
-            // Get system weekday symbols
-            let symbols = calendar.shortWeekdaySymbols
-            
-            // Re-order based on start of week preference
-            if startOfWeekPreference == 1 { // Monday start
-                // Move Sunday to the end
-                var mondayFirstSymbols = Array(symbols[1...]) // Monday to Saturday
-                mondayFirstSymbols.append(symbols[0]) // Add Sunday at the end
-                return mondayFirstSymbols
-            } else {
-                // Default Sunday start
-                return symbols
-            }
-        }
-    }
-    
-    // Helper to get localized month name
-    private func localizedMonthYear() -> String {
-        let language = AppLanguage(rawValue: languagePreference) ?? .systemDefault
-        
-        if language == .chinese {
-            let calendar = Calendar.current
-            let year = calendar.component(.year, from: currentMonth)
-            let month = calendar.component(.month, from: currentMonth)
-            return "\(year)年\(month)月"
-        } else {
-            return currentMonth.formatted(.dateTime.month().year())
-        }
-    }
-    
-    // Helper to determine if a date is a workday (using default rules if no explicit entry)
-    /// Determine if a date is a work day using the three-tier priority system
-    /// 1. First check explicit user-set entry (highest priority)
-    /// 2. Then check holiday data (medium priority)
-    /// 3. Finally fall back to default weekday rules (lowest priority)
-    /// - Parameter date: The date to check
-    /// - Returns: true if it's a work day, false if it's an off day
-    private func isWorkDay(_ date: Date) -> Bool {
-        // First check if we have an explicit entry
-        let calendar = Calendar.current
-        if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
-            return explicitDay.isWorkDay
-        }
-        
-        // Next check holiday data (medium priority)
-        if let holidayStatus = HolidayManager.shared.isWorkDay(for: date) {
-            return holidayStatus
-        }
-        
-        // Fall back to default rules
-        return isDefaultWorkDay(date)
-    }
-    
-    // Helper method to check if a day has been explicitly set by the user
-    // Now checks if the work status differs from what would be expected
-    private func isExplicitlySetByUser(_ date: Date) -> Bool {
-        let calendar = Calendar.current
-        
-        // Check if we have an entry for this date
-        if let existingDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
-            // First determine what the status would be without this explicit entry
-            // (using holiday data or default rules)
-            
-            // Check what the status would be from holiday data
-            if let holidayStatus = HolidayManager.shared.isWorkDay(for: date) {
-                return existingDay.isWorkDay != holidayStatus
-            }
-            
-            // If no holiday data, use default weekday/weekend rules
-            let defaultStatus = isDefaultWorkDay(date)
-            return existingDay.isWorkDay != defaultStatus
-        }
-        
-        // No entry means not user-edited
-        return false
-    }
-    
+    private let dayHeight: CGFloat = 42
+    private let rowSpacing: CGFloat = 8
+
+    // MARK: - Body
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header changes based on view mode
+        VStack(spacing: 0) {
             headerView
+                .frame(height: 50)
             
-            // Content changes based on view mode
-            switch calendarViewMode {
-            case .days:
-                dayOfWeekHeader
-                    .frame(height: 25) // Fixed height for day headers
-                daysGridView
-            case .months:
-                // Add invisible spacer with same height as day header for consistent layout
-                Color.clear.frame(height: 25)
-                monthsGridView
-            }
+            dayOfWeekHeader
+                .frame(height: 25)
+            
+            daysGridView
         }
-        .padding(.horizontal)
-        .animation(.easeInOut(duration: 0.3), value: currentMonth)
-        .animation(.easeInOut(duration: 0.25), value: calendarViewMode) // Faster animation for view mode changes
-        .animation(.easeInOut(duration: 0.3), value: slideDirection) // Animation for slide direction changes
-        .animation(.easeInOut(duration: 0.3), value: yearSlideDirection) // Animation for year navigation
+        .frame(maxWidth: .infinity) // Make the container use full width
     }
     
-    // Create a computed property for each header type with its own transition
+    // MARK: - Header
+    /// Header with < Month Year > controls
     private var headerView: some View {
-        ZStack {
-            // Only one of these will be visible at a time due to the if conditions
-            if calendarViewMode == .days {
-                monthYearHeader
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .bottom).combined(with: .opacity), // Coming from months (moving down)
-                        removal: .move(edge: .bottom).combined(with: .opacity)    // Going to months (moving up)
-                    ))
-                    .id("month-year-header")
-            } else {
-                yearHeader
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .top).combined(with: .opacity),    // Coming from days (moving up)
-                        removal: .move(edge: .top).combined(with: .opacity)       // Going to days (moving down)
-                    ))
-                    .id("year-header")
-            }
-        }
-        .frame(height: 50) // Fixed height for header to prevent shifts
-    }
-    
-    // Header showing Month Year (e.g., "March 2025")
-    private var monthYearHeader: some View {
         HStack {
+            // Left arrow to go to previous month
             Button(action: previousMonth) {
                 Image(systemName: "chevron.left")
                     .foregroundColor(.primary)
             }
-            
             Spacer()
             
-            // Month + Year title with slide transition
-            ZStack {
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.25)) { // Faster transition for mode change
-                        calendarViewMode = .months
-                    }
-                }) {
-                    Text(localizedMonthYear())
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-                }
-                .id("month-title-\(localizedMonthYear())")
-                .transition(.asymmetric(
-                    insertion: slideDirection == .left ? 
-                        .move(edge: .trailing).combined(with: .opacity) :
-                        .move(edge: .leading).combined(with: .opacity),
-                    removal: slideDirection == .left ? 
-                        .move(edge: .leading).combined(with: .opacity) :
-                        .move(edge: .trailing).combined(with: .opacity)
-                ))
-            }
+            // Display localized month and year
+            Text(localizedMonthYear())
+                .font(.title2)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
             
             Spacer()
-            
+            // Right arrow to go to next month
             Button(action: nextMonth) {
                 Image(systemName: "chevron.right")
                     .foregroundColor(.primary)
@@ -230,56 +77,9 @@ struct CustomCalendarView: View {
         }
         .padding(.vertical)
     }
-    
-    // Header showing just Year (e.g., "2025")
-    private var yearHeader: some View {
-        HStack {
-            Button(action: {
-                yearSlideDirection = .right
-                previousYear()
-            }) {
-                Image(systemName: "chevron.left")
-                    .foregroundColor(.primary)
-            }
-            
-            Spacer()
-            
-            // Year title as a separate ZStack with transition
-            ZStack {
-                // Use localized year format
-                let year = Calendar.current.component(.year, from: currentMonth)
-                let yearText = AppLanguage(rawValue: languagePreference) == .chinese ? 
-                    "\(year)年" : "\(year)"
-                
-                Text(yearText)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.primary)
-                    .id("year-\(year)")
-                    .transition(.asymmetric(
-                        insertion: yearSlideDirection == .left ? 
-                            .move(edge: .trailing).combined(with: .opacity) :
-                            .move(edge: .leading).combined(with: .opacity),
-                        removal: yearSlideDirection == .left ? 
-                            .move(edge: .leading).combined(with: .opacity) :
-                            .move(edge: .trailing).combined(with: .opacity)
-                    ))
-            }
-            
-            Spacer()
-            
-            Button(action: {
-                yearSlideDirection = .left
-                nextYear()
-            }) {
-                Image(systemName: "chevron.right")
-                    .foregroundColor(.primary)
-            }
-        }
-        .padding(.vertical)
-    }
-    
-    // Day of week header (Sun, Mon, Tue, etc.)
+
+    // MARK: - Day-of-week header
+    /// (Sun / Mon / Tue / ...). The exact order depends on startOfWeekPreference
     private var dayOfWeekHeader: some View {
         HStack {
             ForEach(localizedWeekdaySymbols, id: \.self) { day in
@@ -290,173 +90,63 @@ struct CustomCalendarView: View {
                     .frame(maxWidth: .infinity)
             }
         }
-        .padding(.bottom, 8) // Add consistent spacing after headers
+        .padding(.bottom, 8)
     }
     
-    // Original days view now extracted to its own computed property
+    // MARK: - Grid of days
+    /// Dynamically calculates the necessary rows, but keeps the container fixed height
     private var daysGridView: some View {
-        // Fixed height container
-        ZStack(alignment: .top) {
-            // Background to ensure fixed size
+        let weeks = daysInMonth().chunked(into: 7)
+        let numberOfWeeks = weeks.count
+        
+        // The content might need only 4, 5, or 6 rows
+        let contentHeight = CGFloat(numberOfWeeks) * dayHeight + CGFloat(numberOfWeeks - 1) * rowSpacing
+        
+        return ZStack(alignment: .top) {
+            // Fixed background rectangle to maintain consistent size
             Rectangle()
                 .fill(Color.clear)
                 .frame(height: calendarGridHeight)
             
-            // Calendar grid with transition
-            VStack(spacing: 0) {
-                // Use a fixed number of rows (6) for consistency
-                let weeks = daysInMonth().chunked(into: 7) // Group days into weeks
-                
-                ForEach(0..<6) { weekIndex in
-                    if weekIndex < weeks.count {
-                        HStack(spacing: 0) {
-                            ForEach(0..<7) { dayIndex in
-                                if dayIndex < weeks[weekIndex].count {
-                                    let date = weeks[weekIndex][dayIndex]
-                                    if date.monthInt != currentMonth.monthInt {
-                                        // Days from other months - empty placeholder
-                                        Color.clear
-                                            .frame(height: dayHeight)
-                                            .frame(maxWidth: .infinity)
-                                    } else {
-                                        // Days from current month
-                                        dayView(for: date)
-                                            .frame(height: dayHeight)
-                                            .frame(maxWidth: .infinity)
-                                    }
+            VStack(spacing: rowSpacing) {
+                ForEach(0..<numberOfWeeks, id: \.self) { weekIndex in
+                    HStack(spacing: 0) {
+                        ForEach(0..<7) { dayIndex in
+                            // Safely unwrap the date in this row & column
+                            if dayIndex < weeks[weekIndex].count {
+                                let date = weeks[weekIndex][dayIndex]
+                                if date.monthInt != currentMonth.monthInt {
+                                    // Adjacent month date (faded)
+                                    dayView(for: date)
+                                        .opacity(0.1)
+                                        .allowsHitTesting(false) // No interaction
+                                        .frame(height: dayHeight)
+                                        .frame(maxWidth: .infinity)
                                 } else {
-                                    Color.clear
+                                    // Current month date
+                                    dayView(for: date)
                                         .frame(height: dayHeight)
                                         .frame(maxWidth: .infinity)
                                 }
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                    } else {
-                        // Empty row to maintain fixed height
-                        HStack {
-                            ForEach(0..<7, id: \.self) { _ in
+                            } else {
+                                // Empty cell if chunk is smaller than 7
                                 Color.clear
                                     .frame(height: dayHeight)
                                     .frame(maxWidth: .infinity)
                             }
                         }
                     }
-                    
-                    if weekIndex < 5 { // Don't add spacing after the last row
-                        Spacer().frame(height: rowSpacing)
-                    }
+                    .frame(maxWidth: .infinity)
                 }
             }
-            .frame(height: calendarGridHeight)
-            .id(currentMonth) // This forces view recreation when month changes
-            // Different transitions based on whether we're changing months or view modes
-            .modifier(ContentTransitionModifier(slideDirection: slideDirection))
+            .frame(height: contentHeight) // Actual grid size
+            .id(currentMonth) // Force refresh on month change
         }
-        .frame(height: calendarGridHeight)
-        .clipped() // Prevent any content from overflowing
+        .frame(height: calendarGridHeight) // Keep container height fixed
+        .clipped()
     }
-    
-    // Month selection grid
-    private var monthsGridView: some View {
-        let monthNames = Calendar.current.monthSymbols
-        let columns = Array(repeating: GridItem(.flexible()), count: 3)
-        let currentYear = Calendar.current.component(.year, from: currentMonth)
-        
-        return ZStack(alignment: .top) {
-            // Background container to maintain consistent height
-            Rectangle()
-                .fill(Color.clear)
-                .frame(height: calendarGridHeight)
-                
-            LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(0..<12) { monthIndex in
-                    let month = monthIndex + 1
-                    
-                    Button(action: {
-                        selectMonth(month)
-                    }) {
-                        ZStack {
-                            // Style based on month state - only highlight current month with border
-                            let style = getMonthStyle(month: month)
-                            
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(style.borderColor, lineWidth: style.borderWidth)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color.clear) // Always clear background
-                                )
-                                .frame(height: 60)
-                            
-                            Text(monthNames[monthIndex])
-                                .fontWeight(style.fontWeight)
-                                .foregroundColor(style.fontColor)
-                        }
-                        .padding(.horizontal, 4) // Add padding to prevent cutoff
-                    }
-                }
-            }
-            .padding(.horizontal, 4) // Add horizontal padding to avoid edge cutoff
-            .padding(.vertical, 4) // Small vertical padding
-            .frame(height: calendarGridHeight)
-            .id("months-\(currentYear)")
-            .modifier(MonthsGridTransitionModifier(slideDirection: yearSlideDirection))
-        }
-        .frame(height: calendarGridHeight)
-        .clipped() // Prevent any content from overflowing
-        .transition(.opacity) // Simple fade transition instead of slide
-    }
-    
-    // Helper to determine the style for each month based on its state
-    private func getMonthStyle(month: Int) -> (background: Color, fontWeight: Font.Weight, fontColor: Color, borderColor: Color, borderWidth: CGFloat) {
-        let isCurrentMonthToday = isCurrentMonthInToday(month)
-        
-        if isCurrentMonthToday {
-            // Current month (today's month) - border only, no fill
-            return (Color.clear, .bold, .primary, .blue, 2)
-        } else {
-            // Regular month - no highlight
-            return (Color.clear, .regular, .primary, .clear, 0)
-        }
-    }
-    
-    // Helper to check if month is the currently displayed month
-    private func isCurrentMonth(_ month: Int) -> Bool {
-        let calendar = Calendar.current
-        return calendar.component(.month, from: currentMonth) == month
-    }
-    
-    // Helper to check if month is the current real month (today's month)
-    private func isCurrentMonthInToday(_ month: Int) -> Bool {
-        let calendar = Calendar.current
-        let currentYear = calendar.component(.year, from: currentMonth)
-        let todayYear = calendar.component(.year, from: Date())
-        let todayMonth = calendar.component(.month, from: Date())
-        
-        return month == todayMonth && currentYear == todayYear
-    }
-    
-    // Action when a month is selected - going from months -> days
-    private func selectMonth(_ month: Int) {
-        let calendar = Calendar.current
-        let year = calendar.component(.year, from: currentMonth)
-        var dateComponents = DateComponents()
-        dateComponents.year = year
-        dateComponents.month = month
-        dateComponents.day = 1
-        
-        if let newDate = calendar.date(from: dateComponents) {
-            currentMonth = newDate
-        }
-        
-        // Go back to days view with animation
-        withAnimation(.easeInOut(duration: 0.35)) { // Slightly longer for smoother effect
-            slideDirection = .none // Reset slide direction to trigger vertical transition
-            calendarViewMode = .days
-        }
-    }
-    
-    // Day view with completely simplified structure
+
+    // MARK: - Single Day Cell
     @ViewBuilder
     private func dayView(for date: Date) -> some View {
         let isToday = Calendar.current.isDate(date, inSameDayAs: Date())
@@ -464,51 +154,47 @@ struct CustomCalendarView: View {
         let hasUserNote = dayHasNote(date)
         let hasSystemNote = HolidayManager.shared.getSystemNote(for: date) != nil
         let day = Calendar.current.component(.day, from: date)
+        
+        // If user explicitly set a day, we show it more opaque if toggled
         let isUserSet = isExplicitlySetByUser(date)
+        let baseOpacity = showStatusOpacityDifference ? (isUserSet ? 0.8 : 0.5) : 0.8
         
-        // Determine opacity
-        let opacity = showStatusOpacityDifference ? (isUserSet ? 0.8 : 0.5) : 0.8
-        
-        // Get colors
+        // We'll color work days red, off days green
         let red = Color.red
         let green = Color.green
         
-        // Create the view with basic components
         ZStack {
-            // Background circle
+            // Background circle depends on whether it's work/off day
             if isWorkDay {
                 if isToday {
-                    // Today's workday
-                    TodayCircleView(color: red, opacity: opacity)
+                    TodayCircleView(color: red, opacity: baseOpacity)
                 } else {
-                    // Regular workday
                     Circle()
-                        .fill(red.opacity(opacity))
+                        .fill(red.opacity(baseOpacity))
                         .frame(width: 36, height: 36)
                 }
             } else {
                 if isToday {
-                    // Today's off day
-                    TodayCircleView(color: green, opacity: opacity)
+                    TodayCircleView(color: green, opacity: baseOpacity)
                 } else {
-                    // Regular off day
                     Circle()
-                        .fill(green.opacity(opacity))
+                        .fill(green.opacity(baseOpacity))
                         .frame(width: 36, height: 36)
                 }
             }
             
-            // Day number and note indicator
+            // Day number + note indicators
             VStack(spacing: 2) {
                 Text("\(day)")
                     .font(.callout)
                     .fontWeight(isToday ? .bold : .regular)
                     .foregroundColor(.white)
+                
                 ZStack {
                     Circle()
                         .stroke(Color.white.opacity(hasSystemNote ? 1 : 0), lineWidth: 1)
                         .frame(width: 5, height: 5)
-
+                    
                     Circle()
                         .fill(Color.white.opacity(hasUserNote ? 1 : 0))
                         .frame(width: 3, height: 3)
@@ -516,20 +202,23 @@ struct CustomCalendarView: View {
             }
         }
         .contentShape(Rectangle())
+        // Tapping toggles the day's workday/off status
         .onTapGesture {
             selectedDate = date
             onToggleWorkStatus?(date)
         }
+        // Long press to edit notes
         .onLongPressGesture {
             selectedDate = date
             onOpenNoteEditor?(date)
         }
     }
-    
-    // Helper view for today's circle with outline
+
+    // MARK: - Helper View for Today
     private struct TodayCircleView: View {
         let color: Color
         let opacity: Double
+        
         var body: some View {
             ZStack {
                 Circle()
@@ -547,163 +236,175 @@ struct CustomCalendarView: View {
         }
     }
     
-    private func getDayWorkStatus(_ date: Date) -> Bool {
-        return isWorkDay(date)
+    // MARK: - Navigation
+    private func previousMonth() {
+        currentMonth = Calendar.current.date(
+            byAdding: .month,
+            value: -1,
+            to: currentMonth
+        ) ?? currentMonth
+    }
+    
+    private func nextMonth() {
+        currentMonth = Calendar.current.date(
+            byAdding: .month,
+            value: 1,
+            to: currentMonth
+        ) ?? currentMonth
+    }
+    
+    // MARK: - Date/WorkDay Helpers
+    private func daysInMonth() -> [Date] {
+        let calendar = Calendar.current
+        
+        // First day of currentMonth
+        guard let firstOfMonth = calendar.date(
+            from: calendar.dateComponents([.year, .month], from: currentMonth)
+        ) else {
+            return []
+        }
+        
+        // Start-of-week offset
+        let firstDayWeekday = calendar.component(.weekday, from: firstOfMonth)
+        
+        // Convert to Monday-based or Sunday-based index
+        let offset = (startOfWeekPreference == 1) 
+            ? (firstDayWeekday + 5) % 7  // Monday start
+            : (firstDayWeekday - 1)      // Sunday start
+
+        guard let startDate = calendar.date(byAdding: .day, value: -offset, to: firstOfMonth) else {
+            return []
+        }
+        
+        // Last day of the current month
+        guard
+            let nextMonth = calendar.date(byAdding: .month, value: 1, to: firstOfMonth),
+            let lastDayOfMonth = calendar.date(byAdding: .day, value: -1, to: nextMonth)
+        else {
+            return []
+        }
+        
+        // Calculate how many days we need after the last day
+        let lastDayWeekday = calendar.component(.weekday, from: lastDayOfMonth)
+        var daysAfter = (startOfWeekPreference == 1)
+            ? (7 - ((lastDayWeekday + 5) % 7 + 1))  // Monday-based
+            : (7 - lastDayWeekday)                  // Sunday-based
+        
+        if daysAfter == 7 {
+            daysAfter = 0
+        }
+        
+        let daysBefore = offset
+        let daysInMonth = calendar.range(of: .day, in: .month, for: firstOfMonth)?.count ?? 30
+        let totalDays = daysBefore + daysInMonth + daysAfter
+        
+        // Construct the needed date array
+        var dates: [Date] = []
+        for i in 0..<totalDays {
+            if let date = calendar.date(byAdding: .day, value: i, to: startDate) {
+                dates.append(date)
+            }
+        }
+        return dates
+    }
+    
+    private func isWorkDay(_ date: Date) -> Bool {
+        let calendar = Calendar.current
+        // Highest priority: user-set
+        if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            return explicitDay.isWorkDay
+        }
+        // Next: holiday data
+        if let holidayStatus = HolidayManager.shared.isWorkDay(for: date) {
+            return holidayStatus
+        }
+        // Finally: default rule (Mon-Fri are workdays)
+        return isDefaultWorkDay(date)
+    }
+    
+    private func isExplicitlySetByUser(_ date: Date) -> Bool {
+        let calendar = Calendar.current
+        if let existing = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            // Compare existing with holiday data or default rule
+            if let holidayStatus = HolidayManager.shared.isWorkDay(for: date) {
+                return holidayStatus != existing.isWorkDay
+            }
+            return isDefaultWorkDay(date) != existing.isWorkDay
+        }
+        return false
     }
     
     private func dayHasNote(_ date: Date) -> Bool {
         let calendar = Calendar.current
         if let workDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
-            return workDay.note != nil && !workDay.note!.isEmpty
+            return workDay.note?.isEmpty == false
         }
         return false
     }
     
-    // Navigation functions
-    private func previousMonth() {
-        slideDirection = .right // Slide to the right when going to previous month
-        withAnimation {
-            currentMonth = Calendar.current.date(
-                byAdding: .month,
-                value: -1,
-                to: currentMonth
-            ) ?? currentMonth
+    // MARK: - Localization Helpers
+    private func localizedMonthYear() -> String {
+        let language = AppLanguage(rawValue: languagePreference) ?? .systemDefault
+        
+        if language == .chinese {
+            let cal = Calendar.current
+            let y = cal.component(.year, from: currentMonth)
+            let m = cal.component(.month, from: currentMonth)
+            return "\(y)年\(m)月"
+        } else {
+            // e.g., "March 2025"
+            return currentMonth.formatted(.dateTime.month().year())
         }
     }
     
-    private func nextMonth() {
-        slideDirection = .left // Slide to the left when going to next month
-        withAnimation {
-            currentMonth = Calendar.current.date(
-                byAdding: .month,
-                value: 1,
-                to: currentMonth
-            ) ?? currentMonth
-        }
-    }
-    
-    private func previousYear() {
-        withAnimation {
-            currentMonth = Calendar.current.date(
-                byAdding: .year,
-                value: -1,
-                to: currentMonth
-            ) ?? currentMonth
-        }
-    }
-    
-    private func nextYear() {
-        withAnimation {
-            currentMonth = Calendar.current.date(
-                byAdding: .year,
-                value: 1,
-                to: currentMonth
-            ) ?? currentMonth
-        }
-    }
-    
-    private func daysInMonth() -> [Date] {
-        let calendar = Calendar.current
+    private var localizedWeekdaySymbols: [String] {
+        let language = AppLanguage(rawValue: languagePreference) ?? .systemDefault
+        let cal = Calendar.current
         
-        // Get the first day of the month
-        let firstDayOfMonth = calendar.date(
-            from: calendar.dateComponents([.year, .month], from: currentMonth)
-        )!
-        
-        // Get the first day of the week for the starting point
-        let firstDayWeekday = calendar.component(.weekday, from: firstDayOfMonth)
-        
-        // Calculate weekday index based on start of week preference
-        var weekdayIndex: Int
-        if startOfWeekPreference == 1 { // Monday start
-            // Convert weekday to Monday-based index (Monday=0, Sunday=6)
-            weekdayIndex = (firstDayWeekday + 5) % 7
-        } else { // Sunday start
-            weekdayIndex = firstDayWeekday - 1 // Standard 0-indexed weekday (Sunday=0)
-        }
-        
-        // Calculate the start date (which might be in the previous month)
-        let startDate = calendar.date(
-            byAdding: .day,
-            value: -weekdayIndex,
-            to: firstDayOfMonth
-        )!
-        
-        // Create date array (42 days for 6 weeks grid)
-        var dates: [Date] = []
-        for day in 0..<42 {
-            if let date = calendar.date(byAdding: .day, value: day, to: startDate) {
-                dates.append(date)
+        // If Chinese
+        if language == .chinese {
+            let chineseSymbols = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+            if startOfWeekPreference == 1 {
+                // Monday as first day
+                var monFirst = Array(chineseSymbols[1...])
+                monFirst.append(chineseSymbols[0])
+                return monFirst
+            } else {
+                return chineseSymbols
+            }
+        } else {
+            // System short symbols
+            let symbols = cal.shortWeekdaySymbols
+            if startOfWeekPreference == 1 {
+                // Monday as first
+                var monFirst = Array(symbols[1...])
+                monFirst.append(symbols[0])
+                return monFirst
+            } else {
+                return symbols
             }
         }
-        
-        return dates
     }
 }
 
-// Extension to split array into chunks
-extension Array {
-    func chunked(into size: Int) -> [[Element]] {
-        return stride(from: 0, to: count, by: size).map {
-            Array(self[$0 ..< Swift.min($0 + size, count)])
-        }
-    }
-}
-
+// MARK: - Extensions
 extension Date {
+    /// Quick helper to get month
     var monthInt: Int {
         Calendar.current.component(.month, from: self)
     }
 }
 
-// Add a new modifier to handle both transitions
-struct ContentTransitionModifier: ViewModifier {
-    let slideDirection: SlideDirection
-    
-    func body(content: Content) -> some View {
-        if slideDirection == .none {
-            // For view mode transitions - simple fade in/out
-            content.transition(.opacity)
-        } else if slideDirection == .left {
-            // Horizontal transition when changing months (left)
-            content.transition(.asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            ))
-        } else {
-            // Horizontal transition when changing months (right)
-            content.transition(.asymmetric(
-                insertion: .move(edge: .leading).combined(with: .opacity),
-                removal: .move(edge: .trailing).combined(with: .opacity)
-            ))
+extension Array {
+    /// Splits an array into chunks of `size`.
+    func chunked(into size: Int) -> [[Element]] {
+        stride(from: 0, to: count, by: size).map { i in
+            Array(self[i ..< Swift.min(i + size, count)])
         }
     }
 }
 
-// Add a modifier for month grid transitions when changing years
-struct MonthsGridTransitionModifier: ViewModifier {
-    let slideDirection: SlideDirection
-    
-    func body(content: Content) -> some View {
-        if slideDirection == .left {
-            // Horizontal transition when changing years (left)
-            content.transition(.asymmetric(
-                insertion: .move(edge: .trailing).combined(with: .opacity),
-                removal: .move(edge: .leading).combined(with: .opacity)
-            ))
-        } else if slideDirection == .right {
-            // Horizontal transition when changing years (right)
-            content.transition(.asymmetric(
-                insertion: .move(edge: .leading).combined(with: .opacity),
-                removal: .move(edge: .trailing).combined(with: .opacity)
-            ))
-        } else {
-            // No horizontal transition
-            content
-        }
-    }
-}
-
+// MARK: - Preview
 struct CustomCalendarView_Previews: PreviewProvider {
     @State static var selectedDate = Date()
     
@@ -715,7 +416,9 @@ struct CustomCalendarView_Previews: PreviewProvider {
                 WorkDay(date: Calendar.current.date(byAdding: .day, value: 1, to: Date())!, isWorkDay: false),
                 WorkDay(date: Calendar.current.date(byAdding: .day, value: 2, to: Date())!, isWorkDay: true)
             ],
-            startOfWeekPreference: 0 // Sunday start for preview
+            languagePreference: AppLanguage.english.rawValue,
+            startOfWeekPreference: 1,
+            showStatusOpacityDifference: true
         )
         .padding()
         .background(Color(UIColor.systemBackground))
