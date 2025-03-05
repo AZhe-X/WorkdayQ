@@ -64,7 +64,7 @@ enum HolidayPreference: Int, CaseIterable, Identifiable {
             return URL(string: "https://calendars.icloud.com/holidays/cn_zh.ics")
         case .us:
             // Using a reliable source for US Federal holidays
-            return URL(string: "https://www.officeholidays.com/ics/usa")
+            return URL(string: "https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/holidays.ics")
         }
     }
 }
@@ -282,6 +282,46 @@ class HolidayManager {
                     holidays.append(holiday)
                 }
             }
+        } else if preference == .us {
+            // Special handling for US federal holidays
+            print("\n🇺🇸 Processing US federal holidays:")
+            
+            // For US holidays, all events are holidays (rest days)
+            for event in events.dropFirst() {
+                if let dateRange = event.range(of: "DTSTART;VALUE=DATE:") {
+                    let startIndex = dateRange.upperBound
+                    let endIndex = event.index(startIndex, offsetBy: 8) // Date format: YYYYMMDD
+                    let dateString = String(event[startIndex..<endIndex])
+                    
+                    let formatter = DateFormatter()
+                    formatter.dateFormat = "yyyyMMdd"
+                    if let holidayDate = formatter.date(from: dateString) {
+                        // Extract the holiday name from SUMMARY field
+                        var holidayName = "US Federal Holiday"
+                        if let summaryRange = event.range(of: "SUMMARY:") {
+                            let summaryStartIndex = summaryRange.upperBound
+                            let summaryText = String(event[summaryStartIndex...])
+                            if let nextLineIndex = summaryText.range(of: "\n") ?? summaryText.range(of: "\r") {
+                                holidayName = String(summaryText[..<nextLineIndex.lowerBound])
+                                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                            }
+                        }
+                        
+                        // Create holiday info (all US federal holidays are rest days)
+                        let holiday = HolidayInfo(
+                            date: holidayDate,
+                            name: holidayName,
+                            isWorkDay: false, // US federal holidays are always rest days
+                            type: .holiday
+                        )
+                        
+                        print("🟩 Added US holiday: \(formatter.string(from: holidayDate)) - \(holidayName)")
+                        holidays.append(holiday)
+                    }
+                }
+            }
+            
+            print("✅ Found \(holidays.count) US federal holidays")
         } else {
             // For US holidays, all are rest days
             for event in events.dropFirst() {
