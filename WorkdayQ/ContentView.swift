@@ -22,6 +22,7 @@ let startOfWeekPreferenceKey = "startOfWeekPreference" // Add key for week start
 let showStatusOpacityDifferenceKey = "showStatusOpacityDifference" // Add key for opacity difference setting
 let weekPatternKey = "weekPattern" // Add key for custom week pattern storage
 let defaultWorkdaySettingKey = "defaultWorkdaySetting" // Setting for workday pattern type (0,1,2)
+let appVersion = "0.3"
 
 // Add extension to dismiss keyboard (place after imports, before constants)
 extension View {
@@ -400,7 +401,7 @@ struct ContentView: View {
                 reloadWidgets()
             }) {
                 settingsView
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
             .onAppear {
@@ -938,6 +939,40 @@ struct ContentView: View {
                         .foregroundColor(.secondary)
                 }
 
+                // Add this to your settingsView after the appearanceSection or another appropriate section
+                Section(header: Text(localizedText("Default Workday Pattern", chineseText: "默认工作日模式"))) {
+                    Picker(localizedText("Workday Pattern Mode", chineseText: "工作日模式"), selection: Binding(
+                        get: { patternManager.workdayMode },
+                        set: { patternManager.updateMode($0) }
+                    )) {
+                        Text(localizedText("Default (Mon-Fri)", chineseText: "默认 (周一至周五)")).tag(0)
+                        Text(localizedText("User Defined Week", chineseText: "自定义周")).tag(1)
+                        Text(localizedText("Shift Work", chineseText: "轮班")).tag(2)
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    // Show week pattern editor only if User Defined Week is selected
+                    if patternManager.workdayMode == 1 {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(localizedText("Customize Your Week Pattern", chineseText: "自定义每周工作日"))
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                            
+                            // Week pattern editor with binding to the pattern manager
+                            WeekPatternEditorView(
+                                weekPattern: Binding(
+                                    get: { patternManager.pattern },
+                                    set: { patternManager.updatePattern($0) }
+                                ),
+                                startOfWeek: startOfWeekPreference,
+                                languagePreference: languagePreference
+                            )
+                        }
+                        .padding(.top, 8)
+                    }
+                }
+                
+
                 // Appearance Settings
 
                 Section(header: Text(localizedText("Appearance", chineseText: "外观"))) {
@@ -994,38 +1029,7 @@ struct ContentView: View {
                     }
                 }
                 
-                // Add this to your settingsView after the appearanceSection or another appropriate section
-                Section(header: Text(localizedText("Default Workday Pattern", chineseText: "默认工作日模式"))) {
-                    Picker(localizedText("Workday Pattern Mode", chineseText: "工作日模式"), selection: Binding(
-                        get: { patternManager.workdayMode },
-                        set: { patternManager.updateMode($0) }
-                    )) {
-                        Text(localizedText("Default (Mon-Fri)", chineseText: "默认 (周一至周五)")).tag(0)
-                        Text(localizedText("User Defined Week", chineseText: "自定义周")).tag(1)
-                        Text(localizedText("Shift Work", chineseText: "轮班")).tag(2)
-                    }
-                    .pickerStyle(.segmented)
-                    
-                    // Show week pattern editor only if User Defined Week is selected
-                    if patternManager.workdayMode == 1 {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(localizedText("Customize Your Week Pattern", chineseText: "自定义每周工作日"))
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
-                            
-                            // Week pattern editor with binding to the pattern manager
-                            WeekPatternEditorView(
-                                weekPattern: Binding(
-                                    get: { patternManager.pattern },
-                                    set: { patternManager.updatePattern($0) }
-                                ),
-                                startOfWeek: startOfWeekPreference,
-                                languagePreference: languagePreference
-                            )
-                        }
-                        .padding(.top, 8)
-                    }
-                }
+                
                 
                 Section(header: Text(localizedText("Data", chineseText: "数据"))) {
                     Button(action: {
@@ -1045,13 +1049,10 @@ struct ContentView: View {
                     HStack {
                         Text(localizedText("Version", chineseText: "版本"))
                         Spacer()
-                        Text("1.0.0")
+                        Text(appVersion)
                             .foregroundColor(.secondary)
                     }
-                    
-                    Link(destination: URL(string: "https://example.com/privacy")!) {
-                        Label(localizedText("Privacy Policy", chineseText: "隐私政策"), systemImage: "lock.shield")
-                    }
+
                 }
                 
                 
