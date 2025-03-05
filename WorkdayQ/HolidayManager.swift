@@ -296,18 +296,20 @@ class HolidayManager {
                     let formatter = DateFormatter()
                     formatter.dateFormat = "yyyyMMdd"
                     if let holidayDate = formatter.date(from: dateString) {
-                        // Extract the holiday name from SUMMARY field
+                        // Simplified extraction of holiday name
                         var holidayName = "US Federal Holiday"
-                        if let summaryRange = event.range(of: "SUMMARY:") {
-                            let summaryStartIndex = summaryRange.upperBound
-                            let summaryText = String(event[summaryStartIndex...])
-                            if let nextLineIndex = summaryText.range(of: "\n") ?? summaryText.range(of: "\r") {
-                                holidayName = String(summaryText[..<nextLineIndex.lowerBound])
+                        
+                        // Extract SUMMARY line from the event
+                        let lines = event.components(separatedBy: "\n")
+                        for line in lines {
+                            if line.hasPrefix("SUMMARY:") {
+                                holidayName = line.replacingOccurrences(of: "SUMMARY:", with: "")
                                     .trimmingCharacters(in: .whitespacesAndNewlines)
+                                break
                             }
                         }
                         
-                        // Create holiday info (all US federal holidays are rest days)
+                        // Create holiday info
                         let holiday = HolidayInfo(
                             date: holidayDate,
                             name: holidayName,
