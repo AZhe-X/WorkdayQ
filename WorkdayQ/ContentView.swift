@@ -20,6 +20,8 @@ let customWorkTermKey = "customWorkTerm" // Add key for custom work term storage
 let appearancePreferenceKey = "appearancePreference" // Add key for dark mode preference
 let startOfWeekPreferenceKey = "startOfWeekPreference" // Add key for week start preference
 let showStatusOpacityDifferenceKey = "showStatusOpacityDifference" // Add key for opacity difference setting
+let weekPatternKey = "weekPattern" // Add key for custom week pattern storage
+let defaultWorkdaySettingKey = "defaultWorkdaySetting" // Setting for workday pattern type (0,1,2)
 
 // Add extension to dismiss keyboard (place after imports, before constants)
 extension View {
@@ -29,11 +31,56 @@ extension View {
 }
 
 // Helper to determine if a date is a workday by default
-// (Monday-Friday = workday, Saturday-Sunday = off day)
-func isDefaultWorkDay(_ date: Date) -> Bool {
+// Now checks if user wants to use custom pattern or standard pattern
+func isDefaultWorkDay(_ date: Date, patternManager: WorkdayPatternManager? = nil) -> Bool {
+    // Use the passed manager or get the shared instance
+    let manager = patternManager ?? WorkdayPatternManager.shared
+    
+    switch manager.workdayMode {
+    case 1:
+        return isDefaultWorkDayWithUserDefineWeek(date, pattern: manager.pattern)
+    case 2:
+        return isDefaultWorkdayShift(date)
+    case 0, _: // Default case
+        return isDefaultWorkDayDefault(date)
+    }
+}
+
+func isDefaultWorkDayDefault(_ date: Date) -> Bool {
     let weekday = Calendar.current.component(.weekday, from: date)
     // 1 = Sunday, 2 = Monday, ..., 7 = Saturday
     return weekday >= 2 && weekday <= 6 // Monday to Friday
+}
+
+// Helper to determine if a date is a workday based on user-defined weekly pattern
+// Uses the weekPattern saved in UserDefaults
+func isDefaultWorkDayWithUserDefineWeek(_ date: Date, pattern: [Bool]? = nil) -> Bool {
+    // If pattern is provided, use it
+    if let pattern = pattern, pattern.count == 7 {
+        let calendar = Calendar.current
+        let weekday = calendar.component(.weekday, from: date)
+        // weekday is 1-based (1 = Sunday, 2 = Monday, ..., 7 = Saturday)
+        return pattern[weekday - 1]
+    }
+    
+    // Otherwise, use the existing function that reads from UserDefaults
+    let weekPatternString = UserDefaults(suiteName: appGroupID)?.string(forKey: weekPatternKey) ?? "0111110"
+    let weekPattern = weekPatternString.map { $0 == "1" }
+    
+    guard weekPattern.count == 7 else {
+        return isDefaultWorkDay(date)
+    }
+    
+    let calendar = Calendar.current
+    let weekday = calendar.component(.weekday, from: date)
+    
+    return weekPattern[weekday - 1]
+}
+
+// Add placeholder shift function
+func isDefaultWorkdayShift(_ date: Date) -> Bool {
+    // For now, just return the standard pattern while we develop this feature
+    return isDefaultWorkDayDefault(date)
 }
 
 // Language options enum
@@ -86,6 +133,85 @@ enum AppAppearance: Int, CaseIterable, Identifiable {
     }
 }
 
+// Add this class near the top of your file, after imports
+class WorkdayPatternManager: ObservableObject {
+    static let shared = WorkdayPatternManager()
+    
+    @Published var pattern: [Bool] = [false, true, true, true, true, true, false]
+    @Published var workdayMode: Int = 0 // 0=default, 1=custom, 2=shift
+    
+    // Load the data from UserDefaults on initialization
+    init() {
+        if let defaults = UserDefaults(suiteName: appGroupID) {
+            // Load workday mode
+            workdayMode = defaults.integer(forKey: defaultWorkdaySettingKey)
+            
+            // Load pattern
+            if let patternString = defaults.string(forKey: weekPatternKey) {
+                pattern = patternString.map { $0 == "1" }
+            }
+        }
+    }
+    
+    // Update pattern and save to UserDefaults
+    func updatePattern(_ newPattern: [Bool]) {
+        guard newPattern.count == 7 else { return }
+        pattern = newPattern
+        saveToUserDefaults()
+    }
+    
+    // Update mode and save to UserDefaults
+    func updateMode(_ newMode: Int) {
+        guard (0...2).contains(newMode) else { return }
+        workdayMode = newMode
+        saveToUserDefaults()
+    }
+    
+    // Reset pattern to default
+    func resetToDefault() {
+        pattern = [false, true, true, true, true, true, false]
+        saveToUserDefaults()
+    }
+    
+    // Save current state to UserDefaults
+    private func saveToUserDefaults() {
+        guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
+        
+        // Save workday mode
+        defaults.set(workdayMode, forKey: defaultWorkdaySettingKey)
+        
+        // Save pattern
+        let patternString = pattern.map { $0 ? "1" : "0" }.joined()
+        defaults.set(patternString, forKey: weekPatternKey)
+        
+        // Force synchronize to ensure immediate write to disk
+        defaults.synchronize()
+        
+        // Reload widgets immediately
+        WidgetCenter.shared.reloadAllTimelines()
+        
+        print("WorkdayPatternManager: Saved pattern \(patternString) and mode \(workdayMode)")
+    }
+    
+    // Add a method to explicitly reload from UserDefaults
+    func reloadFromUserDefaults() {
+        if let defaults = UserDefaults(suiteName: appGroupID) {
+            // Load workday mode
+            workdayMode = defaults.integer(forKey: defaultWorkdaySettingKey)
+            
+            // Load pattern
+            if let patternString = defaults.string(forKey: weekPatternKey) {
+                pattern = patternString.map { $0 == "1" }
+            } else {
+                // Default pattern if none exists
+                pattern = [false, true, true, true, true, true, false] // Sun-Sat (Sun/Sat off)
+                // Save this default
+                saveToUserDefaults()
+            }
+        }
+    }
+}
+
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -111,6 +237,9 @@ struct ContentView: View {
     // Add explicit app group UserDefaults access for direct writes
     private let sharedDefaults = UserDefaults(suiteName: appGroupID)
     
+    // Keep the pattern manager as our single source of truth
+    @StateObject private var patternManager = WorkdayPatternManager.shared
+    
     /// UNIFIED FUNCTION: Determine if a date is a work day using the three-tier priority system
     /// 1. First check explicit user-set entry (highest priority)
     /// 2. Then check holiday data (medium priority)
@@ -131,8 +260,8 @@ struct ContentView: View {
             return holidayStatus
         }
         
-        // Fall back to default rules (lowest priority)
-        return isDefaultWorkDay(dayStart)
+        // Fall back to default rules using pattern manager (lowest priority)
+        return isDefaultWorkDay(dayStart, patternManager: patternManager)
     }
     
     var todayWorkDay: WorkDay? {
@@ -256,7 +385,20 @@ struct ContentView: View {
             .sheet(isPresented: $showingNoteEditor) {
                 noteEditorView
             }
-            .sheet(isPresented: $showingSettings) {
+            .sheet(isPresented: $showingSettings, onDismiss: {
+                // Force UI refresh when settings are closed
+                // This will ensure any week pattern changes are reflected in the calendar
+                
+                // Force update of selectedDate to trigger UI refresh
+                let currentDate = selectedDate
+                selectedDate = Date.distantPast
+                DispatchQueue.main.async {
+                    selectedDate = currentDate
+                }
+                
+                // Also reload widgets to ensure they're up to date
+                reloadWidgets()
+            }) {
                 settingsView
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
@@ -266,11 +408,15 @@ struct ContentView: View {
                 selectedDate = Date()
                 
                 checkAndCreateTodayEntry()
+                
+                // Also make sure patternManager is synced with latest UserDefaults
+                patternManager.reloadFromUserDefaults()
+                
                 // Always reload widget when view appears
                 reloadWidgets()
-                // Make sure shared defaults has the current language preference
+                
+                // Make sure other preferences are synced
                 syncLanguagePreference()
-                // Also sync appearance preference
                 syncAppearancePreference()
             }
             .onChange(of: languagePreference) { oldValue, newValue in
@@ -303,6 +449,9 @@ struct ContentView: View {
                     // Refresh our data
                     checkAndCreateTodayEntry()
                     reloadWidgets()
+                    
+                    // Make sure patternManager has latest data
+                    patternManager.reloadFromUserDefaults()
                 }
             }
             // Apply the preferred color scheme
@@ -575,34 +724,28 @@ struct ContentView: View {
     
     // Force reload of all widgets
     private func reloadWidgets() {
-        // First, update the timestamp in UserDefaults to signal change
         if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
             let timestamp = Date().timeIntervalSince1970
             sharedDefaults.set(timestamp, forKey: lastUpdateKey)
             
-            // Make sure language preference is also synced
+            // Sync other preferences
             sharedDefaults.set(languagePreference, forKey: languagePreferenceKey)
-            
-            // Make sure custom work term is also synced
             sharedDefaults.set(customWorkTerm, forKey: customWorkTermKey)
-            
-            // Make sure appearance preference is also synced
             sharedDefaults.set(appearancePreference, forKey: appearancePreferenceKey)
-            
-            // Make sure start of week preference is also synced
             sharedDefaults.set(startOfWeekPreference, forKey: startOfWeekPreferenceKey)
-            
-            // Make sure show status opacity difference preference is also synced
             sharedDefaults.set(showStatusOpacityDifference, forKey: showStatusOpacityDifferenceKey)
             
-            // Force write
+            // Get pattern data from patternManager (instead of local properties)
+            let patternString = patternManager.pattern.map { $0 ? "1" : "0" }.joined()
+            sharedDefaults.set(patternString, forKey: weekPatternKey)
+            sharedDefaults.set(patternManager.workdayMode, forKey: defaultWorkdaySettingKey)
+            
             sharedDefaults.synchronize()
             
             // Cache the work days data for widget fallback access
             cacheWorkDaysToUserDefaults(workDays)
         }
         
-        // Tell WidgetKit to reload
         WidgetCenter.shared.reloadAllTimelines()
     }
     
@@ -851,10 +994,38 @@ struct ContentView: View {
                     }
                 }
                 
-                
-                
-                
-                
+                // Add this to your settingsView after the appearanceSection or another appropriate section
+                Section(header: Text(localizedText("Default Workday Pattern", chineseText: "默认工作日模式"))) {
+                    Picker(localizedText("Workday Pattern Mode", chineseText: "工作日模式"), selection: Binding(
+                        get: { patternManager.workdayMode },
+                        set: { patternManager.updateMode($0) }
+                    )) {
+                        Text(localizedText("Default (Mon-Fri)", chineseText: "默认 (周一至周五)")).tag(0)
+                        Text(localizedText("User Defined Week", chineseText: "自定义周")).tag(1)
+                        Text(localizedText("Shift Work", chineseText: "轮班")).tag(2)
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    // Show week pattern editor only if User Defined Week is selected
+                    if patternManager.workdayMode == 1 {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(localizedText("Customize Your Week Pattern", chineseText: "自定义每周工作日"))
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                            
+                            // Week pattern editor with binding to the pattern manager
+                            WeekPatternEditorView(
+                                weekPattern: Binding(
+                                    get: { patternManager.pattern },
+                                    set: { patternManager.updatePattern($0) }
+                                ),
+                                startOfWeek: startOfWeekPreference,
+                                languagePreference: languagePreference
+                            )
+                        }
+                        .padding(.top, 8)
+                    }
+                }
                 
                 Section(header: Text(localizedText("Data", chineseText: "数据"))) {
                     Button(action: {
@@ -975,6 +1146,72 @@ struct ContentView: View {
         sharedDefaults.synchronize() // Force immediate write
         
         print("Synced opacity difference preference to UserDefaults: \(showStatusOpacityDifference)")
+    }
+}
+
+// Modified WeekPatternEditorView with improved spacing
+struct WeekPatternEditorView: View {
+    @Binding var weekPattern: [Bool]
+    let startOfWeek: Int
+    let languagePreference: Int
+    
+    var body: some View {
+        // Use GeometryReader to get full width of container
+        GeometryReader { geometry in
+            // Calculate equal spacing based on container width
+            let availableWidth = geometry.size.width
+            let buttonSize: CGFloat = 36
+            let spacing = (availableWidth - (buttonSize * 7)) / 6
+            
+            HStack(spacing: spacing) {
+                ForEach(0..<7, id: \.self) { index in
+                    let adjustedIndex = (index + startOfWeek) % 7
+                    
+                    Button {
+                        var newPattern = weekPattern
+                        newPattern[adjustedIndex] = !newPattern[adjustedIndex]
+                        weekPattern = newPattern
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(weekPattern[adjustedIndex] ? Color.red : Color.green)
+                                .opacity(0.8)
+                                .frame(width: buttonSize, height: buttonSize)
+                            
+                            Text(dayAbbreviation(for: adjustedIndex))
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .contentShape(Circle())
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 36)
+        }
+        .frame(height: 50) // Fixed height for the GeometryReader
+        .padding(.vertical, 4)
+    }
+    
+    // Helper function to get appropriate day abbreviation based on language
+    private func dayAbbreviation(for dayIndex: Int) -> String {
+        let language = AppLanguage(rawValue: languagePreference) ?? .systemDefault
+        
+        // Use system language if set to default
+        let systemLanguage = Locale.current.language.languageCode?.identifier ?? "en"
+        let useChineseChars = (language == .chinese) || 
+                              (language == .systemDefault && systemLanguage.hasPrefix("zh"))
+        
+        if useChineseChars {
+            // Use Chinese characters
+            let chineseDays = ["日", "一", "二", "三", "四", "五", "六"]
+            return chineseDays[dayIndex]
+        } else {
+            // Use English abbreviations
+            let englishDays = ["S", "M", "T", "W", "T", "F", "S"]
+            return englishDays[dayIndex]
+        }
     }
 }
 

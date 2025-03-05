@@ -45,6 +45,9 @@ struct CustomCalendarView: View {
     @State private var yearForMonthSelection = Date()   // The year we're viewing in month selection
     @State private var yearSlideDirection: SlideDirection = .none  // For year navigation
 
+    // Add the pattern manager
+    @ObservedObject var patternManager: WorkdayPatternManager = WorkdayPatternManager.shared
+
     // Now accept a month Date parameter so we can show different months
     private func calendarContent(for displayMonth: Date) -> some View {
         VStack(spacing: 0) {
