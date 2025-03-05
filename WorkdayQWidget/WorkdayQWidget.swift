@@ -458,7 +458,7 @@ struct TodayWidgetView: View {
                     .fontWeight(.semibold)
             } else {
                 // For English, use shorter text in small widget
-                Text(isSmallWidget ? "Today" : "Today is")
+                Text(isSmallWidget ? "Today" : "Today is a")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .padding(.bottom, -6)
@@ -491,8 +491,8 @@ struct TodayWidgetView: View {
                     HStack(alignment: .lastTextBaseline, spacing: 16) {
                         // For English, use shorter text in small widget
                         Text(isSmallWidget ? 
-                             (isWorkDay ? "Work" : "Off") : 
-                             (isWorkDay ? "Workday" : "Off day"))
+                             (isWorkDay ? "Work" : "Rest") : 
+                             (isWorkDay ? "Workday" : "Day Off"))
                             .font(.largeTitle) // Update to match app
                             .fontWeight(.bold)
                             .foregroundColor(isWorkDay ? .red : .green)

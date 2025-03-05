@@ -22,7 +22,7 @@ let startOfWeekPreferenceKey = "startOfWeekPreference" // Add key for week start
 let showStatusOpacityDifferenceKey = "showStatusOpacityDifference" // Add key for opacity difference setting
 let weekPatternKey = "weekPattern" // Add key for custom week pattern storage
 let defaultWorkdaySettingKey = "defaultWorkdaySetting" // Setting for workday pattern type (0,1,2)
-let appVersion = "0.3"
+let appVersion = "0.4"
 let useDarkIconPreferenceKey = "useDarkIconPreference" // Add key for dark icon preference
 
 // Add extension to dismiss keyboard (place after imports, before constants)
@@ -479,59 +479,34 @@ struct ContentView: View {
             Text(dateFormatter.string(from: Date()))
                 .font(.headline)
                 .padding(.bottom, 4)
-                 .padding(.top, 4)
+                .padding(.top, 4)
             
-             Spacer()
+            Spacer()
             
-            // Show "Today is:" or "今天" based on language
-            if languagePreference == AppLanguage.chinese.rawValue {
-                Text("今天")
-                    .font(.title3)
-                    .foregroundColor(.secondary)
-                    .padding(.bottom, -6)
-                    .fontWeight(.semibold)
-            } else {
-                Text(localizedText("Today is", chineseText: "今天是"))
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .padding(.bottom, -6)
-                    .fontWeight(.semibold)
-            }
+            // Use localizedText consistently, not direct language checks
+            Text(localizedText("Today is a", chineseText: "今天"))
+                .font(languagePreference == AppLanguage.chinese.rawValue ? .title3 : .subheadline)
+                .foregroundColor(.secondary)
+                .padding(.bottom, -6)
+                .fontWeight(.semibold)
             
             HStack {
                 let isWorkDay = isWorkDay(forDate: Date()) // Use unified function
                 
-                // Use different text format for Chinese
-                if languagePreference == AppLanguage.chinese.rawValue {
-                    HStack(alignment: .lastTextBaseline, spacing: 8) {
-                        Text(customizeWorkTerm(isWorkDay ? "要上班" : "不上班"))
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundColor(isWorkDay ? .red : .green)
-                        
-                        // Add holiday note if available
-                        if let holidayNote = HolidayManager.shared.getSystemNote(for: Date()) {
-                            Text(holidayNote)
-                                .font(.title3)
-                                .foregroundColor(.gray)
-                        }
-                    }
-                } else {
-                    // Now make English layout match Chinese layout
-                    HStack(alignment: .lastTextBaseline, spacing: 8) {
-                        Text(isWorkDay ? 
-                             localizedText("Workday", chineseText: "工作日") : 
-                             localizedText("Off day", chineseText: "休息日"))
-                            .font(.largeTitle) // Changed from .title2 to match Chinese
-                            .fontWeight(.bold)
-                            .foregroundColor(isWorkDay ? .red : .green)
-                        
-                        // Add holiday note if available - same as Chinese version
-                        if let holidayNote = HolidayManager.shared.getSystemNote(for: Date()) {
-                            Text(holidayNote)
-                                .font(.title3)
-                                .foregroundColor(.gray)
-                        }
+                // Use localizedText consistently for all text
+                HStack(alignment: .lastTextBaseline, spacing: 8) {
+                    Text(isWorkDay ? 
+                         customizeWorkTerm(localizedText("Workday", chineseText: "要上班")) : 
+                         localizedText("Day Off", chineseText: "不上班"))
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(isWorkDay ? .red : .green)
+                    
+                    // Store today's holiday note in a property to ensure consistency
+                    if let holidayNote = HolidayManager.shared.getSystemNote(for: Date()) {
+                        Text(holidayNote)
+                            .font(.title3)
+                            .foregroundColor(.gray)
                     }
                 }
                 
@@ -880,64 +855,67 @@ struct ContentView: View {
 
                 // Customization Settings
                 Section(header: Text(localizedText("Customization", chineseText: "自定义"))) {
-                    ZStack {
-                        Color.clear
-                            .contentShape(Rectangle()) // Make the entire area tappable
-                            .onTapGesture {
-                                // Dismiss keyboard when tapping outside the TextField
-                                isCustomTermFieldFocused = false
-                                hideKeyboard() // Add direct keyboard dismissal
-                            }
-                        
-                        VStack(alignment: .leading) {
-                            Text(localizedText("Customize work term (Chinese)", chineseText: "自定义工作用语"))
-                                .font(.subheadline)
-                            
-                            TextField("上班", text: $customWorkTerm)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                                .focused($isCustomTermFieldFocused) // Keep focused modifier
+                    // Only show the work term customization if language is set to Chinese
+                    if languagePreference == AppLanguage.chinese.rawValue {
+                        ZStack {
+                            Color.clear
+                                .contentShape(Rectangle()) // Make the entire area tappable
                                 .onTapGesture {
-                                    // This is redundant with the focused modifier but ensures focus
-                                    isCustomTermFieldFocused = true
-                                }
-                                .submitLabel(.done) // Set the keyboard return key to "Done"
-                                .toolbar {
-                                    ToolbarItemGroup(placement: .keyboard) {
-                                        Spacer() // Push button to the right
-                                        Button(localizedText("Done", chineseText: "完成")) {
-                                            isCustomTermFieldFocused = false
-                                            hideKeyboard() // Add direct keyboard dismissal
-                                        }
-                                    }
-                                }
-                                .onSubmit {
-                                    // Hide keyboard when user presses "Done" on keyboard
+                                    // Dismiss keyboard when tapping outside the TextField
                                     isCustomTermFieldFocused = false
                                     hideKeyboard() // Add direct keyboard dismissal
                                 }
-                                .onChange(of: customWorkTerm) { oldValue, newValue in
-                                    // If user clears the field, set back to default
-                                    if newValue.isEmpty {
-                                        customWorkTerm = "上班"
+                            
+                            VStack(alignment: .leading) {
+                                Text(localizedText("Customize work term", chineseText: "自定义工作用语"))
+                                    .font(.subheadline)
+                                
+                                TextField("上班", text: $customWorkTerm)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .focused($isCustomTermFieldFocused) // Keep focused modifier
+                                    .onTapGesture {
+                                        // This is redundant with the focused modifier but ensures focus
+                                        isCustomTermFieldFocused = true
                                     }
-                                    // Sync to UserDefaults for widget access
-                                    syncCustomWorkTerm()
-                                    // Reload widgets to show new term
-                                    reloadWidgets()
+                                    .submitLabel(.done) // Set the keyboard return key to "Done"
+                                    .toolbar {
+                                        ToolbarItemGroup(placement: .keyboard) {
+                                            Spacer() // Push button to the right
+                                            Button(localizedText("Done", chineseText: "完成")) {
+                                                isCustomTermFieldFocused = false
+                                                hideKeyboard() // Add direct keyboard dismissal
+                                            }
+                                        }
+                                    }
+                                    .onSubmit {
+                                        // Hide keyboard when user presses "Done" on keyboard
+                                        isCustomTermFieldFocused = false
+                                        hideKeyboard() // Add direct keyboard dismissal
+                                    }
+                                    .onChange(of: customWorkTerm) { oldValue, newValue in
+                                        // If user clears the field, set back to default
+                                        if newValue.isEmpty {
+                                            customWorkTerm = "上班"
+                                        }
+                                        // Sync to UserDefaults for widget access
+                                        syncCustomWorkTerm()
+                                        // Reload widgets to show new term
+                                        reloadWidgets()
+                                    }
+                                
+                                Text(localizedText("Examples: School day", chineseText: "例如：上课、上学、值班"))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                if customWorkTerm != "上班" {
+                                    Button(localizedText("Reset to Default", chineseText: "重置为默认")) {
+                                        customWorkTerm = "上班"
+                                        syncCustomWorkTerm()
+                                        reloadWidgets()
+                                    }
+                                    .foregroundColor(.blue)
+                                    .padding(.top, 2)
                                 }
-                            
-                            Text(localizedText("Examples: 上课 (class), 上学 (school)", chineseText: "例如：上课、上学、值班"))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            if customWorkTerm != "上班" {
-                                Button(localizedText("Reset to Default", chineseText: "重置为默认")) {
-                                    customWorkTerm = "上班"
-                                    syncCustomWorkTerm()
-                                    reloadWidgets()
-                                }
-                                .foregroundColor(.blue)
-                                .padding(.top, 2)
                             }
                         }
                     }
