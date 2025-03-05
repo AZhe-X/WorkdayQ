@@ -153,7 +153,7 @@ struct CustomCalendarView: View {
                                 if date.monthInt != currentMonth.monthInt {
                                     // Adjacent month date (faded)
                                     dayView(for: date)
-                                        .opacity(0.1)
+                                        .opacity(0.3)
                                         .frame(height: dayHeight)
                                         .frame(maxWidth: .infinity)
                                 } else {

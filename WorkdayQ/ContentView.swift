@@ -23,6 +23,7 @@ let showStatusOpacityDifferenceKey = "showStatusOpacityDifference" // Add key fo
 let weekPatternKey = "weekPattern" // Add key for custom week pattern storage
 let defaultWorkdaySettingKey = "defaultWorkdaySetting" // Setting for workday pattern type (0,1,2)
 let appVersion = "0.3"
+let useDarkIconPreferenceKey = "useDarkIconPreference" // Add key for dark icon preference
 
 // Add extension to dismiss keyboard (place after imports, before constants)
 extension View {
@@ -241,6 +242,9 @@ struct ContentView: View {
     // Keep the pattern manager as our single source of truth
     @StateObject private var patternManager = WorkdayPatternManager.shared
     
+    // Add this to ContentView properties section
+    @AppStorage(useDarkIconPreferenceKey) private var useDarkIconPreference = false // Default: off
+    
     /// UNIFIED FUNCTION: Determine if a date is a work day using the three-tier priority system
     /// 1. First check explicit user-set entry (highest priority)
     /// 2. Then check holiday data (medium priority)
@@ -419,6 +423,9 @@ struct ContentView: View {
                 // Make sure other preferences are synced
                 syncLanguagePreference()
                 syncAppearancePreference()
+                
+                // Still update app icon initially
+                updateAppIcon()
             }
             .onChange(of: languagePreference) { oldValue, newValue in
                 // When language changes, sync it immediately and reload widgets
@@ -573,9 +580,14 @@ struct ContentView: View {
     var noteEditorView: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
+                // Add date display at the top
+                Text(dateFormatter.string(from: selectedDate))
+                    .font(.headline)
+                    .padding(.bottom, 8)
+                
                 // User note input with 15 character limit
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(localizedText("Your Not:", chineseText: "您的备注:"))
+                    Text(localizedText("Your Note:", chineseText: "您的备注:"))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
@@ -583,8 +595,8 @@ struct ContentView: View {
                               text: $noteText)
                         .padding()
                         .textFieldStyle(.roundedBorder)
-                        .onChange(of: noteText) { oldValue, newValue in
-                            // Limit to 15 characters
+                        .onChange(of: noteText) { _, newValue in
+                            // Only truncate if text exceeds limit, don't modify during deletion
                             if newValue.count > 15 {
                                 noteText = String(newValue.prefix(15))
                             }
@@ -945,7 +957,7 @@ struct ContentView: View {
                         get: { patternManager.workdayMode },
                         set: { patternManager.updateMode($0) }
                     )) {
-                        Text(localizedText("Default (Mon-Fri)", chineseText: "默认 (周一至周五)")).tag(0)
+                        Text(localizedText("Default", chineseText: "默认")).tag(0)
                         Text(localizedText("User Defined Week", chineseText: "自定义周")).tag(1)
                         Text(localizedText("Shift Work", chineseText: "轮班")).tag(2)
                     }
@@ -954,9 +966,9 @@ struct ContentView: View {
                     // Show week pattern editor only if User Defined Week is selected
                     if patternManager.workdayMode == 1 {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(localizedText("Customize Your Week Pattern", chineseText: "自定义每周工作日"))
-                                .font(.footnote)
-                                .foregroundColor(.secondary)
+                            // Text(localizedText("Customize Your Week Pattern", chineseText: "自定义每周工作日"))
+                            //     .font(.footnote)
+                            //     .foregroundColor(.secondary)
                             
                             // Week pattern editor with binding to the pattern manager
                             WeekPatternEditorView(
@@ -987,6 +999,22 @@ struct ContentView: View {
                         syncAppearancePreference()
                         // Force widgets to reload with new appearance
                         reloadWidgets()
+                    }
+                    
+                    // Add the dark icon toggle here
+                    Toggle(
+                        localizedText("Use dark app icon", chineseText: "使用深色应用图标"),
+                        isOn: $useDarkIconPreference
+                    )
+                    .onChange(of: useDarkIconPreference) { oldValue, newValue in
+                        // Update app icon when preference changes
+                        updateAppIcon()
+                        
+                        // Sync to shared UserDefaults
+                        if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+                            sharedDefaults.set(newValue, forKey: useDarkIconPreferenceKey)
+                            sharedDefaults.synchronize()
+                        }
                     }
                     
                     Picker(localizedText("Start of Week", chineseText: "每周开始日"), selection: $startOfWeekPreference) {
@@ -1147,6 +1175,23 @@ struct ContentView: View {
         sharedDefaults.synchronize() // Force immediate write
         
         print("Synced opacity difference preference to UserDefaults: \(showStatusOpacityDifference)")
+    }
+
+    // Modify the updateAppIcon function
+    private func updateAppIcon() {
+        // Instead of checking appearance, just use the direct preference
+        let iconName = useDarkIconPreference ? "AppIconDark" : nil // nil = default icon
+        
+        // Only change if needed
+        if UIApplication.shared.alternateIconName != iconName {
+            UIApplication.shared.setAlternateIconName(iconName) { error in
+                if let error = error {
+                    print("Error changing app icon: \(error.localizedDescription)")
+                } else {
+                    print("App icon changed successfully to \(useDarkIconPreference ? "dark" : "light")")
+                }
+            }
+        }
     }
 }
 
