@@ -250,9 +250,14 @@ struct CustomCalendarView: View {
                 navigateToAdjacentDay(date)
             }
         }
-        // Only add long press for current month days
+        // Only add long press for current month days with haptic feedback
         .onLongPressGesture {
             if isInCurrentMonth {
+                // Generate haptic feedback
+                let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+                impactFeedback.prepare()
+                impactFeedback.impactOccurred()
+                
                 selectedDate = date
                 onOpenNoteEditor?(date)
             }
