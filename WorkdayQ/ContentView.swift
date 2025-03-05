@@ -245,6 +245,9 @@ struct ContentView: View {
     // Add this to ContentView properties section
     @AppStorage(useDarkIconPreferenceKey) private var useDarkIconPreference = false // Default: off
     
+    // 1. Add a local state to hold the holiday note (used only while note editor is open).
+    @State private var holidayNote: String? = nil
+    
     /// UNIFIED FUNCTION: Determine if a date is a work day using the three-tier priority system
     /// 1. First check explicit user-set entry (highest priority)
     /// 2. Then check holiday data (medium priority)
@@ -389,6 +392,10 @@ struct ContentView: View {
             }
             .sheet(isPresented: $showingNoteEditor) {
                 noteEditorView
+                    // 2. Load the holiday note when this sheet appears.
+                    .onAppear {
+                        holidayNote = HolidayManager.shared.getSystemNote(for: selectedDate)
+                    }
             }
             .sheet(isPresented: $showingSettings, onDismiss: {
                 // Force UI refresh when settings are closed
@@ -609,8 +616,9 @@ struct ContentView: View {
                         .padding(.trailing, 8)
                 }
                 
-                // Display system note (holiday) if available
-                if let systemNote = HolidayManager.shared.getSystemNote(for: selectedDate) {
+                // 3. Use the cached holidayNote here instead of calling 
+                // HolidayManager.shared.getSystemNote(for: selectedDate) again.
+                if let systemNote = holidayNote {
                     Divider()
                         .padding(.vertical, 4)
                     
