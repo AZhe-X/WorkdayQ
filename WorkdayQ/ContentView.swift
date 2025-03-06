@@ -993,7 +993,12 @@ struct ContentView: View {
                                         // If user clears the field, set back to default
                                         if newValue.isEmpty {
                                             customWorkTerm = "上班"
+                                        } 
+                                        // Limit to 2 Chinese characters maximum
+                                        else if newValue.count > 2 {
+                                            customWorkTerm = String(newValue.prefix(2))
                                         }
+                                        
                                         // Sync to UserDefaults for widget access
                                         syncCustomWorkTerm()
                                         // Reload widgets to show new term

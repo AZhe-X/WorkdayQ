@@ -19,14 +19,10 @@ let startOfWeekPreferenceKey = "startOfWeekPreference" // Add start of week pref
 let holidayPreferenceKey = "holidayPreference" // Add holiday preference key
 let holidayDataKey = "holidayData" // Add holiday data key
 let showStatusOpacityDifferenceKey = "showStatusOpacityDifference" // Add opacity difference setting key
-
-// Helper to determine if a date is a workday by default
-// (Monday-Friday = workday, Saturday-Sunday = off day)
-func isDefaultWorkDay(_ date: Date) -> Bool {
-    let weekday = Calendar.current.component(.weekday, from: date)
-    // 1 = Sunday, 2 = Monday, ..., 7 = Saturday
-    return weekday >= 2 && weekday <= 6 // Monday to Friday
-}
+let weekPatternKey = "weekPattern" // Add key for custom week pattern storage
+let defaultWorkdaySettingKey = "defaultWorkdaySetting" // Setting for workday pattern type (0,1,2)
+let shiftPatternKey = "shiftPattern" // Key for shift work pattern storage
+let shiftStartDateKey = "shiftStartDate" // Key for shift pattern start date
 
 // Language options enum (duplicated from main app)
 enum AppLanguage: Int, CaseIterable {
@@ -350,7 +346,10 @@ struct DayEntry: TimelineEntry {
             return holidayInfo.isWorkDay
         }
         
-        // Fall back to default rules (lowest priority)
+        // Force refresh the pattern manager from UserDefaults before using it
+        WidgetPatternManager.shared.reloadFromUserDefaults()
+        
+        // Fall back to pattern rules (lowest priority) - now uses the full implementation
         return isDefaultWorkDay(date)
     }
     
@@ -419,7 +418,7 @@ struct TodayWidgetView: View {
                 "M月d日" : "MMM d" // Chinese: "5月10日", English: "May 10"
         } else {
             // For medium widgets, keep the current medium date style
-            formatter.dateStyle = .medium
+            formatter.dateStyle = .full
         }
         
         // Try to respect the language preference for date format
@@ -443,7 +442,7 @@ struct TodayWidgetView: View {
         print("TodayWidgetView detected colorScheme: \(colorScheme == .dark ? "dark" : "light")")
         
         return VStack(alignment: .leading, spacing: 4) {
-            Text(dateFormatter.string(from: entry.date))
+            Text(dateFormatter.string(from: Date()))
                 .font(.headline)
                 .padding(.bottom, 4)
                 .padding(.top, 4)
@@ -762,13 +761,10 @@ struct SmallWeekWidgetView: View {
         // Use the new isWorkDay method
         let isWorkDay = entry.isWorkDay(forDate: date)
         
-        // Use "Today" and "Tomorrow" for clarity - respect language
-        let dayName: String
-        if useChineseText {
-            dayName = offset == 0 ? "今天" : "明天"
-        } else {
-            dayName = offset == 0 ? "Today" : "Tomorrow"
-        }
+        let dayOfWeek = calendar.component(.weekday, from: date)
+        
+        // Use localized day names based on language preference
+        _ = useChineseText ? "今天" : "Today" // Replace with _ to ignore unused value
         
         let dayNum = calendar.component(.day, from: date)
         
@@ -777,7 +773,7 @@ struct SmallWeekWidgetView: View {
         // Set sizes based on whether it's today or tomorrow
         let circleSize: CGFloat = isToday ? 90 : 60
         let fontSize: CGFloat = isToday ? 50 : 30
-        let fontWeight: Font.Weight = isToday ? .light : .regular
+        _ = isToday ? Font.Weight.light : Font.Weight.regular // Now Swift knows which type these members belong to
 
         return VStack(spacing: 0) {
             // Text(dayName)
@@ -997,4 +993,136 @@ enum HolidayType: String, Codable {
     case holiday = "holiday"      // Regular holiday (休)
     case adjustedRest = "rest"    // Regular rest day (周末)
     case adjustedWork = "work"    // Adjusted workday (调休 to work - 班)
+}
+
+// Add a simplified WorkdayPatternManager for the widget (read-only version)
+class WidgetPatternManager {
+    static let shared = WidgetPatternManager()
+    
+    // Properties to store pattern data
+    var pattern: [Bool] = [false, true, true, true, true, true, false]
+    var workdayMode: Int = 0 // 0=default, 1=custom, 2=shift
+    var shiftPattern: [Bool] = [true, true, true, true, false, false, false] // Default 4-on, 3-off
+    var shiftStartDate: Date = Calendar.current.startOfDay(for: Date()) // Default to today
+    
+    // Load the data from UserDefaults on initialization
+    init() {
+        reloadFromUserDefaults()
+    }
+    
+    // Method to load pattern data from UserDefaults
+    func reloadFromUserDefaults() {
+        if let defaults = UserDefaults(suiteName: appGroupID) {
+            // Load workday mode
+            workdayMode = defaults.integer(forKey: defaultWorkdaySettingKey)
+            
+            // Load weekly pattern
+            if let patternString = defaults.string(forKey: weekPatternKey) {
+                pattern = patternString.map { $0 == "1" }
+            } else {
+                // Default pattern if none exists
+                pattern = [false, true, true, true, true, true, false] // Sun-Sat (Sun/Sat off)
+            }
+            
+            // Load shift pattern
+            if let shiftPatternString = defaults.string(forKey: shiftPatternKey) {
+                shiftPattern = shiftPatternString.map { $0 == "1" }
+            } else {
+                // Default shift pattern if none exists
+                shiftPattern = [true, true, true, true, false, false, false] // 4 on, 3 off
+            }
+            
+            // Load shift start date
+            if let shiftStartTimestamp = defaults.object(forKey: shiftStartDateKey) as? TimeInterval {
+                shiftStartDate = Date(timeIntervalSince1970: shiftStartTimestamp)
+            } else {
+                // Default to today if none exists
+                shiftStartDate = Calendar.current.startOfDay(for: Date())
+            }
+        }
+    }
+}
+
+// Helper to determine if a date is a workday by default
+// Now checks if user wants to use custom pattern or standard pattern
+func isDefaultWorkDay(_ date: Date) -> Bool {
+    // Get the shared pattern manager
+    let manager = WidgetPatternManager.shared
+    
+    switch manager.workdayMode {
+    case 1:
+        return isDefaultWorkDayWithUserDefineWeek(date, pattern: manager.pattern)
+    case 2:
+        return isDefaultWorkdayShift(date)
+    case 0, _: // Default case
+        return isDefaultWorkDayDefault(date)
+    }
+}
+
+// Standard workday function (Monday-Friday)
+func isDefaultWorkDayDefault(_ date: Date) -> Bool {
+    let weekday = Calendar.current.component(.weekday, from: date)
+    // 1 = Sunday, 2 = Monday, ..., 7 = Saturday
+    return weekday >= 2 && weekday <= 6 // Monday to Friday
+}
+
+// Helper to determine if a date is a workday based on user-defined weekly pattern
+func isDefaultWorkDayWithUserDefineWeek(_ date: Date, pattern: [Bool]? = nil) -> Bool {
+    // If pattern is provided, use it
+    if let pattern = pattern, pattern.count == 7 {
+        let calendar = Calendar.current
+        let weekday = calendar.component(.weekday, from: date)
+        // weekday is 1-based (1 = Sunday, 2 = Monday, ..., 7 = Saturday)
+        return pattern[weekday - 1]
+    }
+    
+    // Otherwise, use the existing function that reads from UserDefaults
+    let weekPatternString = UserDefaults(suiteName: appGroupID)?.string(forKey: weekPatternKey) ?? "0111110"
+    let weekPattern = weekPatternString.map { $0 == "1" }
+    
+    guard weekPattern.count == 7 else {
+        return isDefaultWorkDayDefault(date)
+    }
+    
+    let calendar = Calendar.current
+    let weekday = calendar.component(.weekday, from: date)
+    
+    return weekPattern[weekday - 1]
+}
+
+// Function to determine workday status based on shift pattern
+func isDefaultWorkdayShift(_ date: Date) -> Bool {
+    // Get the shared pattern manager to access the shift pattern and start date
+    let patternManager = WidgetPatternManager.shared
+    let shiftPattern = patternManager.shiftPattern
+    let shiftStartDate = patternManager.shiftStartDate
+    
+    // Ensure we have a valid pattern
+    guard !shiftPattern.isEmpty else {
+        return isDefaultWorkDayDefault(date) // Fallback to standard pattern if no shift pattern
+    }
+    
+    // Calculate days since the shift pattern start date
+    let calendar = Calendar.current
+    let startDay = calendar.startOfDay(for: shiftStartDate)
+    let targetDay = calendar.startOfDay(for: date)
+    
+    // Get days between the dates (could be negative if date is before start date)
+    let components = calendar.dateComponents([.day], from: startDay, to: targetDay)
+    guard let daysSinceStart = components.day else {
+        return isDefaultWorkDayDefault(date) // Fallback if calculation fails
+    }
+    
+    // Handle dates before the shift start date by working backwards
+    if daysSinceStart < 0 {
+        // For negative days, we need to carefully calculate the modulo
+        // to ensure we wrap around correctly in the pattern
+        let patternLength = shiftPattern.count
+        let adjustedIndex = (patternLength - (abs(daysSinceStart) % patternLength)) % patternLength
+        return shiftPattern[adjustedIndex]
+    } else {
+        // For dates on or after the shift start date, simple modulo works
+        let patternIndex = daysSinceStart % shiftPattern.count
+        return shiftPattern[patternIndex]
+    }
 }
