@@ -22,7 +22,7 @@ let startOfWeekPreferenceKey = "startOfWeekPreference" // Add key for week start
 let showStatusOpacityDifferenceKey = "showStatusOpacityDifference" // Add key for opacity difference setting
 let weekPatternKey = "weekPattern" // Add key for custom week pattern storage
 let defaultWorkdaySettingKey = "defaultWorkdaySetting" // Setting for workday pattern type (0,1,2)
-let appVersion = "0.5"
+let appVersion = "0.6"
 let useDarkIconPreferenceKey = "useDarkIconPreference" // Add key for dark icon preference
 let shiftPatternKey = "shiftPattern" // Key for shift work pattern storage
 let shiftStartDateKey = "shiftStartDate" // Key for shift pattern start date
@@ -1010,98 +1010,6 @@ struct ContentView: View {
                     }
                 }
 
-                // Customization Settings
-                Section(header: Text(localizedText("Customization", chineseText: "自定义"))) {
-                    // Only show the work term customization if language is set to Chinese
-                    if languagePreference == AppLanguage.chinese.rawValue {
-                        ZStack {
-                            Color.clear
-                                .contentShape(Rectangle()) // Make the entire area tappable
-                                .onTapGesture {
-                                    // Dismiss keyboard when tapping outside the TextField
-                                    isCustomTermFieldFocused = false
-                                    hideKeyboard() // Add direct keyboard dismissal
-                                }
-                            
-                            VStack(alignment: .leading) {
-                                Text(localizedText("Customize work term", chineseText: "自定义工作用语"))
-                                    .font(.subheadline)
-                                
-                                TextField("上班", text: $customWorkTerm)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .focused($isCustomTermFieldFocused) // Keep focused modifier
-                                    .onTapGesture {
-                                        // This is redundant with the focused modifier but ensures focus
-                                        isCustomTermFieldFocused = true
-                                    }
-                                    .submitLabel(.done) // Set the keyboard return key to "Done"
-                                    .toolbar {
-                                        ToolbarItemGroup(placement: .keyboard) {
-                                            Spacer() // Push button to the right
-                                            Button(localizedText("Done", chineseText: "完成")) {
-                                                isCustomTermFieldFocused = false
-                                                hideKeyboard() // Add direct keyboard dismissal
-                                            }
-                                        }
-                                    }
-                                    .onSubmit {
-                                        // Hide keyboard when user presses "Done" on keyboard
-                                        isCustomTermFieldFocused = false
-                                        hideKeyboard() // Add direct keyboard dismissal
-                                    }
-                                    .onChange(of: customWorkTerm) { oldValue, newValue in
-                                        // If user clears the field, set back to default
-                                        if newValue.isEmpty {
-                                            customWorkTerm = "上班"
-                                        } 
-                                        // Limit to 2 Chinese characters maximum
-                                        else if newValue.count > 2 {
-                                            customWorkTerm = String(newValue.prefix(2))
-                                        }
-                                        
-                                        // Sync to UserDefaults for widget access
-                                        syncCustomWorkTerm()
-                                        // Reload widgets to show new term
-                                        reloadWidgets()
-                                    }
-                                
-                                Text(localizedText("Examples: School day", chineseText: "例如：上课、上学、值班"))
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                
-                                if customWorkTerm != "上班" {
-                                    Button(localizedText("Reset to Default", chineseText: "重置为默认")) {
-                                        customWorkTerm = "上班"
-                                        syncCustomWorkTerm()
-                                        reloadWidgets()
-                                    }
-                                    .foregroundColor(.blue)
-                                    .padding(.top, 2)
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Add new toggle for opacity differentiation
-                    VStack(alignment: .leading) {
-                        Toggle(
-                        localizedText("Highlight user-edited days", chineseText: "高亮自定义日期"),
-                        isOn: $showStatusOpacityDifference
-                    )
-                    .onChange(of: showStatusOpacityDifference) { oldValue, newValue in
-                        // When toggled, sync to shared defaults and reload widgets
-                        syncOpacityDifferencePreference()
-                        reloadWidgets()
-                    }
-                    
-                    Text(localizedText("When on, days edited by you will appear more vibrant", 
-                         chineseText: "开启时，自定义日期将会更明显。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    }
-                    
-                }
-
                 // Add this to your settingsView after the Default Workday Pattern section
                 Section(header: Text(localizedText("Default Workday Pattern", chineseText: "默认工作日模式"))) {
                     Picker(localizedText("Workday Pattern Mode", chineseText: "工作日模式"), selection: Binding(
@@ -1198,6 +1106,116 @@ struct ContentView: View {
                                 .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
+
+
+
+                // Customization Settings
+                Section(header: Text(localizedText("Customization", chineseText: "自定义"))) {
+                    
+                    // Start of Week
+                    Picker(localizedText("Start of Week", chineseText: "每周开始日"), selection: $startOfWeekPreference) {
+                        Text(localizedText("Sunday", chineseText: "周日")).tag(0)
+                        Text(localizedText("Monday", chineseText: "周一")).tag(1)
+                    }
+                    .onChange(of: startOfWeekPreference) { oldValue, newValue in
+                        // Sync the start of week preference to UserDefaults for widget access
+                        syncStartOfWeekPreference()
+                        // Force widgets to reload with new start of week
+                        reloadWidgets()
+                    }
+
+
+                    // Only show the work term customization if language is set to Chinese
+                    if languagePreference == AppLanguage.chinese.rawValue {
+                        ZStack {
+                            Color.clear
+                                .contentShape(Rectangle()) // Make the entire area tappable
+                                .onTapGesture {
+                                    // Dismiss keyboard when tapping outside the TextField
+                                    isCustomTermFieldFocused = false
+                                    hideKeyboard() // Add direct keyboard dismissal
+                                }
+                            
+                            VStack(alignment: .leading) {
+                                Text(localizedText("Customize work term", chineseText: "自定义工作用语"))
+                                    .font(.subheadline)
+                                
+                                TextField("上班", text: $customWorkTerm)
+                                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .focused($isCustomTermFieldFocused) // Keep focused modifier
+                                    .onTapGesture {
+                                        // This is redundant with the focused modifier but ensures focus
+                                        isCustomTermFieldFocused = true
+                                    }
+                                    .submitLabel(.done) // Set the keyboard return key to "Done"
+                                    .toolbar {
+                                        ToolbarItemGroup(placement: .keyboard) {
+                                            Spacer() // Push button to the right
+                                            Button(localizedText("Done", chineseText: "完成")) {
+                                                isCustomTermFieldFocused = false
+                                                hideKeyboard() // Add direct keyboard dismissal
+                                            }
+                                        }
+                                    }
+                                    .onSubmit {
+                                        // Hide keyboard when user presses "Done" on keyboard
+                                        isCustomTermFieldFocused = false
+                                        hideKeyboard() // Add direct keyboard dismissal
+                                    }
+                                    .onChange(of: customWorkTerm) { oldValue, newValue in
+                                        // If user clears the field, set back to default
+                                        if newValue.isEmpty {
+                                            customWorkTerm = "上班"
+                                        } 
+                                        // Limit to 2 Chinese characters maximum
+                                        else if newValue.count > 2 {
+                                            customWorkTerm = String(newValue.prefix(2))
+                                        }
+                                        
+                                        // Sync to UserDefaults for widget access
+                                        syncCustomWorkTerm()
+                                        // Reload widgets to show new term
+                                        reloadWidgets()
+                                    }
+                                
+                                Text(localizedText("Examples: School day", chineseText: "例如：上课、上学、值班"))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                if customWorkTerm != "上班" {
+                                    Button(localizedText("Reset to Default", chineseText: "重置为默认")) {
+                                        customWorkTerm = "上班"
+                                        syncCustomWorkTerm()
+                                        reloadWidgets()
+                                    }
+                                    .foregroundColor(.blue)
+                                    .padding(.top, 2)
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Add new toggle for opacity differentiation
+                    VStack(alignment: .leading) {
+                        Toggle(
+                        localizedText("Highlight user-edited days", chineseText: "高亮自定义日期"),
+                        isOn: $showStatusOpacityDifference
+                    )
+                    .onChange(of: showStatusOpacityDifference) { oldValue, newValue in
+                        // When toggled, sync to shared defaults and reload widgets
+                        syncOpacityDifferencePreference()
+                        reloadWidgets()
+                    }
+                    
+                    Text(localizedText("When on, days edited by you will appear more vibrant", 
+                         chineseText: "开启时，自定义日期将会更明显。"))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    }
+                    
+                }
+
+                
                 
 
                 // Appearance Settings
@@ -1232,16 +1250,7 @@ struct ContentView: View {
                         }
                     }
                     
-                    Picker(localizedText("Start of Week", chineseText: "每周开始日"), selection: $startOfWeekPreference) {
-                        Text(localizedText("Sunday", chineseText: "周日")).tag(0)
-                        Text(localizedText("Monday", chineseText: "周一")).tag(1)
-                    }
-                    .onChange(of: startOfWeekPreference) { oldValue, newValue in
-                        // Sync the start of week preference to UserDefaults for widget access
-                        syncStartOfWeekPreference()
-                        // Force widgets to reload with new start of week
-                        reloadWidgets()
-                    }
+                    
                 }
 
                 // Language Settings
