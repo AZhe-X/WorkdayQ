@@ -340,6 +340,9 @@ struct ContentView: View {
     // Add this to your ContentView properties
     @State private var confirmClearCustomDays = false
     
+    // Add this state variable to ContentView struct with other @State properties
+    @State private var isEraserModeActive = false
+    
     /// UNIFIED FUNCTION: Determine if a date is a work day using the three-tier priority system
     /// 1. First check explicit user-set entry (highest priority)
     /// 2. Then check holiday data (medium priority)
@@ -423,39 +426,76 @@ struct ContentView: View {
                     workDays: workDays,
                     languagePreference: languagePreference,
                     startOfWeekPreference: startOfWeekPreference,
-                    showStatusOpacityDifference: showStatusOpacityDifference,
+                    showStatusOpacityDifference: showStatusOpacityDifference || isEraserModeActive, // Force show in eraser mode
+                    patternManager: patternManager,
+                    isEraserModeActive: isEraserModeActive, // Add this parameter
                     onToggleWorkStatus: { date in
-                        toggleWorkDay(date)
+                        if isEraserModeActive {
+                            resetDayStatus(date)
+                        } else {
+                            toggleWorkDay(date)
+                        }
                     },
                     onOpenNoteEditor: { date in
-                        // Set up note editor for the selected date
-                        if let selectedDay = workDays.first(where: { 
-                            Calendar.current.isDate($0.date, inSameDayAs: date)
-                        }) {
-                            noteText = selectedDay.note ?? ""
+                        selectedDate = date
+                        
+                        // Get existing note if any
+                        if let existingDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+                            noteText = existingDay.note ?? ""
                         } else {
                             noteText = ""
                         }
+                        
                         showingNoteEditor = true
                     }
                 )
                 
                 // Instructions for interactions
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label(localizedText("Tap a day to toggle work/off status", 
-                                           chineseText: "点击日期切换工作/休息状态"), 
-                              systemImage: "hand.tap")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Label(localizedText("Long-press to add or edit notes", 
-                                           chineseText: "长按添加或编辑备注"), 
-                              systemImage: "hand.tap.fill")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                HStack(alignment: .top) {
+                    if isEraserModeActive {
+                        // Single line text for eraser mode
+                        Label(localizedText("Tap a day to reset to default pattern", 
+                                          chineseText: "点击日期以重置为默认模式"), 
+                                  systemImage: "hand.tap")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+
+                    } else {
+                        // Original VStack with separate labels for tap and long-press
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(localizedText("Tap a day to toggle work/off status", 
+                                               chineseText: "点击日期切换工作/休息状态"), 
+                                  systemImage: "hand.tap")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Label(localizedText("Long-press to add or edit notes", 
+                                               chineseText: "长按添加或编辑备注"), 
+                                  systemImage: "hand.tap.fill")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     }
+                    
                     Spacer()
+                    
+                    // Eraser button remains the same
+                    Button(action: {
+                        withAnimation {
+                            isEraserModeActive.toggle()
+                        }
+                    }) {
+                        Image(systemName: "eraser\(isEraserModeActive ? ".fill" : "")")
+                            .foregroundColor(isEraserModeActive ? .blue : .secondary)
+                            .padding(8)
+                            .background(
+                                Circle()
+                                    .fill(isEraserModeActive ? Color.blue.opacity(0.2) : Color.clear)
+                            )
+                    }
+                    .accessibilityLabel(isEraserModeActive 
+                        ? localizedText("Exit eraser mode", chineseText: "退出橡皮擦模式") 
+                        : localizedText("Enter eraser mode", chineseText: "进入橡皮擦模式"))
                 }
                 .padding(.horizontal)
                 
@@ -547,6 +587,9 @@ struct ContentView: View {
             // Add scene phase monitoring to refresh date when app becomes active
             .onChange(of: scenePhase) { oldPhase, newPhase in
                 if newPhase == .active {
+                    // App has become active again
+                    isEraserModeActive = false // Reset eraser mode when app becomes active
+                    
                     print("ContentView: App became active - refreshing data")
                     // Reset selected date to today in case date changed while app was inactive
                     let calendar = Calendar.current
@@ -561,6 +604,11 @@ struct ContentView: View {
                     
                     // Make sure patternManager has latest data
                     patternManager.reloadFromUserDefaults()
+                } else if newPhase == .background {
+                    // App has moved to background
+                    isEraserModeActive = false // Also reset when app goes to background
+                    
+                    // Rest of your existing code...
                 }
             }
             // Apply the preferred color scheme
@@ -742,16 +790,25 @@ struct ContentView: View {
     private func toggleWorkDay(_ date: Date) {
         // Check if this date already exists in our store
         if let existingWorkDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
-            // If it does, toggle between states 1 and 2
-            existingWorkDay.dayStatus = existingWorkDay.dayStatus == 2 ? 1 : 2
+            // Handle differently based on current status
+            if existingWorkDay.dayStatus == 0 {
+                // If currently unmodified, set to opposite of what would be determined
+                // by the full priority system (holiday and pattern)
+                let naturalStatus = isWorkDay(forDate: date)
+                existingWorkDay.dayStatus = naturalStatus ? 1 : 2
+            } else {
+                // If already explicitly set (1 or 2), just toggle between those states
+                existingWorkDay.dayStatus = existingWorkDay.dayStatus == 2 ? 1 : 2
+            }
         } else {
-            // If not, create a new entry with the opposite of default status
-            let defaultStatus = isDefaultWorkDay(date, patternManager: patternManager)
+            // If not, create a new entry with the opposite of natural status
+            // (considering holiday data and patterns)
+            let naturalStatus = isWorkDay(forDate: date)
             
-            // New workday with status opposite of default (explicit user choice)
+            // New workday with status opposite of natural (explicit user choice)
             let newWorkDay = WorkDay(
                 date: date,
-                dayStatus: defaultStatus ? 1 : 2, // The opposite of the default
+                dayStatus: naturalStatus ? 1 : 2, // The opposite of the natural status
                 note: nil
             )
             modelContext.insert(newWorkDay)
@@ -781,7 +838,7 @@ struct ContentView: View {
             existingWorkDay.note = noteText.isEmpty ? nil : noteText
         } else {
             // Create new entry with default status
-            let defaultStatus = isDefaultWorkDay(selectedDate, patternManager: patternManager)
+            let defaultStatus = isWorkDay(forDate: selectedDate)
             let newWorkDay = WorkDay(
                 date: selectedDate,
                 dayStatus: 0, // Unmodified - follow pattern
@@ -1403,6 +1460,31 @@ struct ContentView: View {
             }
         } else {
             print("No custom day states needed to be reset")
+        }
+    }
+
+    // Add this function to ContentView struct
+    private func resetDayStatus(_ date: Date) {
+        // Check if this date already exists in our store
+        if let existingWorkDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+            // Reset the status to 0 (follow default pattern)
+            existingWorkDay.dayStatus = 0
+            
+            // Try to save changes
+            do {
+                try modelContext.save()
+                
+                // Update widget data
+                if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+                    sharedDefaults.set(Date().timeIntervalSince1970, forKey: lastUpdateKey)
+                    sharedDefaults.synchronize()
+                }
+                
+                // Force widgets to refresh
+                reloadWidgets()
+            } catch {
+                print("Error resetting day status: \(error.localizedDescription)")
+            }
         }
     }
 }

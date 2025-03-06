@@ -24,6 +24,8 @@ struct CustomCalendarView: View {
     var languagePreference: Int = 0
     var startOfWeekPreference: Int = 0
     var showStatusOpacityDifference: Bool = true
+    var patternManager: WorkdayPatternManager = WorkdayPatternManager.shared
+    var isEraserModeActive: Bool = false
     
     // Callbacks for toggling (tap) and editing notes (long press)
     var onToggleWorkStatus: ((Date) -> Void)?
@@ -44,9 +46,6 @@ struct CustomCalendarView: View {
     @State private var isShowingMonthSelection = false  // Track if we're showing month selection
     @State private var yearForMonthSelection = Date()   // The year we're viewing in month selection
     @State private var yearSlideDirection: SlideDirection = .none  // For year navigation
-
-    // Add the pattern manager
-    @ObservedObject var patternManager: WorkdayPatternManager = WorkdayPatternManager.shared
 
     // Now accept a month Date parameter so we can show different months
     private func calendarContent(for displayMonth: Date) -> some View {
@@ -712,7 +711,9 @@ struct CustomCalendarView_Previews: PreviewProvider {
             ],
             languagePreference: AppLanguage.english.rawValue,
             startOfWeekPreference: 1,
-            showStatusOpacityDifference: true
+            showStatusOpacityDifference: true,
+            patternManager: WorkdayPatternManager.shared,
+            isEraserModeActive: false
         )
         .padding()
         .background(Color(UIColor.systemBackground))
