@@ -336,9 +336,12 @@ struct DayEntry: TimelineEntry {
     func isWorkDay(forDate date: Date) -> Bool {
         let calendar = Calendar.current
         
-        // First check if we have an explicit user record (highest priority)
+        // First check if we have an explicit user record with dayStatus > 0 (highest priority)
         if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
-            return explicitDay.isWorkDay
+            if explicitDay.dayStatus > 0 {
+                return explicitDay.dayStatus == 2
+            }
+            // Otherwise, fall through for days with notes but default status
         }
         
         // Next check holiday data (medium priority)
@@ -349,7 +352,7 @@ struct DayEntry: TimelineEntry {
         // Force refresh the pattern manager from UserDefaults before using it
         WidgetPatternManager.shared.reloadFromUserDefaults()
         
-        // Fall back to pattern rules (lowest priority) - now uses the full implementation
+        // Fall back to pattern rules (lowest priority)
         return isDefaultWorkDay(date)
     }
     
@@ -852,13 +855,25 @@ struct WeekOverviewWidget: Widget {
 struct WorkDayStruct: Identifiable {
     let id: UUID
     let date: Date
-    let isWorkDay: Bool
+    let dayStatus: Int
     let note: String?
     
+    var isWorkDay: Bool {
+        return dayStatus == 2
+    }
+    
+    init(date: Date, dayStatus: Int = 0, note: String? = nil, id: UUID = UUID()) {
+        self.id = id
+        self.date = date
+        self.dayStatus = dayStatus
+        self.note = note
+    }
+    
+    // For backward compatibility
     init(date: Date, isWorkDay: Bool = false, note: String? = nil, id: UUID = UUID()) {
         self.id = id
         self.date = date
-        self.isWorkDay = isWorkDay
+        self.dayStatus = isWorkDay ? 2 : 1
         self.note = note
     }
 }
@@ -868,13 +883,21 @@ struct WorkDayStruct: Identifiable {
 @Model
 final class WorkDay {
     @Attribute(.unique) var date: Date
-    var isWorkDay: Bool
+    var dayStatus: Int
     var note: String?
     
-    init(date: Date, isWorkDay: Bool = false, note: String? = nil) {
+    var isWorkDay: Bool {
+        return dayStatus == 2
+    }
+    
+    init(date: Date, dayStatus: Int = 0, note: String? = nil) {
         self.date = date
-        self.isWorkDay = isWorkDay
+        self.dayStatus = dayStatus
         self.note = note
+    }
+    
+    convenience init(date: Date, isWorkDay: Bool = false, note: String? = nil) {
+        self.init(date: date, dayStatus: isWorkDay ? 2 : 1, note: note)
     }
 }
 
@@ -882,7 +905,7 @@ final class WorkDay {
 fileprivate func convertToWorkDayStruct(_ workDayModel: WorkDay) -> WorkDayStruct {
     return WorkDayStruct(
         date: workDayModel.date,
-        isWorkDay: workDayModel.isWorkDay,
+        dayStatus: workDayModel.dayStatus,
         note: workDayModel.note
     )
 }
@@ -928,11 +951,11 @@ private func loadWorkDaysFromUserDefaults() -> [WorkDayStruct]? {
                 
                 for dict in decodedData {
                     if let date = dict["date"] as? Date,
-                       let isWorkDay = dict["isWorkDay"] as? Bool {
+                       let dayStatus = dict["dayStatus"] as? Int {
                         let note = dict["note"] as? String
                         workDays.append(WorkDayStruct(
                             date: date,
-                            isWorkDay: isWorkDay,
+                            dayStatus: dayStatus,
                             note: note
                         ))
                     }

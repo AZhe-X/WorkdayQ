@@ -392,27 +392,27 @@ struct CustomCalendarView: View {
     }
     
     private func isWorkDay(_ date: Date) -> Bool {
-        let calendar = Calendar.current
-        // Highest priority: user-set
-        if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
-            return explicitDay.isWorkDay
+        // First check if user explicitly set this day
+        if let existingDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+            // Only use explicit status if user set it (dayStatus > 0)
+            if existingDay.dayStatus > 0 {
+                return existingDay.dayStatus == 2
+            }
+            // Otherwise fall through to use default status
         }
-        // Next: holiday data
-        if let holidayStatus = HolidayManager.shared.isWorkDay(for: date) {
-            return holidayStatus
+        
+        // Check holiday data via holiday manager
+        if let holidayInfo = HolidayManager.shared.getHolidayInfo(for: date) {
+            return holidayInfo.isWorkDay
         }
-        // Finally: default rule (Mon-Fri are workdays)
+        
+        // Fall back to default pattern
         return isDefaultWorkDay(date)
     }
     
     private func isExplicitlySetByUser(_ date: Date) -> Bool {
-        let calendar = Calendar.current
-        if let existing = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
-            // Compare existing with holiday data or default rule
-            if let holidayStatus = HolidayManager.shared.isWorkDay(for: date) {
-                return holidayStatus != existing.isWorkDay
-            }
-            return isDefaultWorkDay(date) != existing.isWorkDay
+        if let existingDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+            return existingDay.dayStatus > 0
         }
         return false
     }

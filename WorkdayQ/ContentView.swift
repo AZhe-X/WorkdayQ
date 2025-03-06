@@ -337,6 +337,9 @@ struct ContentView: View {
     @State private var editingShiftLength = false
     @FocusState private var isShiftLengthFieldFocused: Bool // Add dedicated focus state
     
+    // Add this to your ContentView properties
+    @State private var confirmClearCustomDays = false
+    
     /// UNIFIED FUNCTION: Determine if a date is a work day using the three-tier priority system
     /// 1. First check explicit user-set entry (highest priority)
     /// 2. Then check holiday data (medium priority)
@@ -344,21 +347,22 @@ struct ContentView: View {
     /// - Parameter date: The date to check
     /// - Returns: true if it's a work day, false if it's an off day
     func isWorkDay(forDate date: Date) -> Bool {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: date)
-        
         // First check if we have an explicit user record (highest priority)
-        if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: dayStart) }) {
-            return explicitDay.isWorkDay
+        if let existingWorkDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+            // Only use the stored status if user explicitly set it
+            if existingWorkDay.dayStatus > 0 {
+                return existingWorkDay.dayStatus == 2
+            }
+            // Otherwise, fall through to use default pattern (for days with notes but default status)
         }
         
         // Next check holiday data (medium priority)
-        if let holidayStatus = HolidayManager.shared.isWorkDay(for: dayStart) {
-            return holidayStatus
+        if let holidayInfo = HolidayManager.shared.getHolidayInfo(for: date) {
+            return holidayInfo.isWorkDay
         }
         
-        // Fall back to default rules using pattern manager (lowest priority)
-        return isDefaultWorkDay(dayStart, patternManager: patternManager)
+        // Fall back to default rules (lowest priority)
+        return isDefaultWorkDay(date, patternManager: patternManager)
     }
     
     var todayWorkDay: WorkDay? {
@@ -421,7 +425,7 @@ struct ContentView: View {
                     startOfWeekPreference: startOfWeekPreference,
                     showStatusOpacityDifference: showStatusOpacityDifference,
                     onToggleWorkStatus: { date in
-                        toggleWorkStatus(for: date)
+                        toggleWorkDay(date)
                     },
                     onOpenNoteEditor: { date in
                         // Set up note editor for the selected date
@@ -735,76 +739,75 @@ struct ContentView: View {
         // 3. Default rules (weekday = work, weekend = off) as fallback
     }
     
-    private func toggleWorkStatus(for date: Date) {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: date)
-        
-        // If an entry already exists, toggle its status
-        if let existingDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: dayStart) }) {
-            // Toggle the work status (only changing the work status, not touching the note)
-            existingDay.isWorkDay.toggle()
-            
-            // Save the updated entry - we never delete entries when toggling work status
-            // This ensures that user-set work statuses are always preserved
+    private func toggleWorkDay(_ date: Date) {
+        // Check if this date already exists in our store
+        if let existingWorkDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+            // If it does, toggle between states 1 and 2
+            existingWorkDay.dayStatus = existingWorkDay.dayStatus == 2 ? 1 : 2
         } else {
-            // No entry exists - create a new one with toggled status (opposite of the expected status)
-            let expectedStatus = isWorkDay(forDate: dayStart) // Use unified function
-            let newStatus = !expectedStatus  // Toggle from whatever would be expected (default or holiday)
+            // If not, create a new entry with the opposite of default status
+            let defaultStatus = isDefaultWorkDay(date, patternManager: patternManager)
             
-            // Create new entry with the toggled status and empty note
-            let newWorkDay = WorkDay(date: dayStart, isWorkDay: newStatus)
+            // New workday with status opposite of default (explicit user choice)
+            let newWorkDay = WorkDay(
+                date: date,
+                dayStatus: defaultStatus ? 1 : 2, // The opposite of the default
+                note: nil
+            )
             modelContext.insert(newWorkDay)
         }
         
-        // Save data and notify widget
+        // Try to save changes immediately
         do {
             try modelContext.save()
-            notifyWidgetDataChanged()
+            
+            // Update widget data
+            if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+                sharedDefaults.set(Date().timeIntervalSince1970, forKey: lastUpdateKey)
+                sharedDefaults.synchronize()
+            }
+            
+            // Force widgets to refresh
+            reloadWidgets()
         } catch {
-            print("Error saving work status change: \(error.localizedDescription)")
+            print("Error saving day status: \(error.localizedDescription)")
         }
     }
     
     private func saveNote() {
-        let calendar = Calendar.current
-        let selectedDayStart = calendar.startOfDay(for: selectedDate)
-        
-        if let existingDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: selectedDayStart) }) {
-            // Just update the note, don't touch the work status
-            existingDay.note = noteText.isEmpty ? nil : noteText
-            
-            // If the note is now empty, and we have an explicit record just for a note,
-            // we can delete it (but ONLY if the work status is already the expected one)
-            if (existingDay.note == nil || existingDay.note!.isEmpty) {
-                // This is the expected status without our explicit entry
-                let expectedStatus = isWorkDay(forDate: selectedDayStart) // Use unified function
-                
-                // Only delete if the entry has the same work status as expected
-                // AND the note is empty - this means the entry isn't providing any value
-                if existingDay.isWorkDay == expectedStatus {
-                    modelContext.delete(existingDay)
-                }
-            }
+        // Check if we already have an entry for this date
+        if let existingWorkDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: selectedDate) }) {
+            // Just update the note, preserve the status
+            existingWorkDay.note = noteText.isEmpty ? nil : noteText
         } else {
-            // Only create a new entry if there is a note to add
-            if !noteText.isEmpty {
-                // Get the expected work status but don't modify it
-                // This honors any holiday or default status
-                let expectedStatus = isWorkDay(forDate: selectedDayStart) // Use unified function
-                
-                // Create new entry with the expected status and the note
-                let newWorkDay = WorkDay(date: selectedDayStart, isWorkDay: expectedStatus, note: noteText)
-                modelContext.insert(newWorkDay)
-            }
-            // If note is empty, we don't create a database entry at all
+            // Create new entry with default status
+            let defaultStatus = isDefaultWorkDay(selectedDate, patternManager: patternManager)
+            let newWorkDay = WorkDay(
+                date: selectedDate,
+                dayStatus: 0, // Unmodified - follow pattern
+                note: noteText.isEmpty ? nil : noteText
+            )
+            modelContext.insert(newWorkDay)
         }
         
-        // Save data and notify widget
+        // Try to save changes
         do {
             try modelContext.save()
-            notifyWidgetDataChanged()
+            
+            // Update the timestamp for widget sync
+            if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+                sharedDefaults.set(Date().timeIntervalSince1970, forKey: lastUpdateKey)
+                sharedDefaults.synchronize()
+            }
+            
+            // Hide the note editor and reset state
+            showingNoteEditor = false
+            noteText = ""
+            
+            // Force widgets to refresh
+            reloadWidgets()
         } catch {
-            print("Error saving note: \(error.localizedDescription)")
+            print("Failed to save note: \(error.localizedDescription)")
         }
     }
     
@@ -853,7 +856,7 @@ struct ContentView: View {
         let workDayDicts = workDays.map { workDay -> [String: Any] in
             var dict: [String: Any] = [
                 "date": workDay.date,
-                "isWorkDay": workDay.isWorkDay
+                "dayStatus": workDay.dayStatus
             ]
             
             if let note = workDay.note {
@@ -1226,6 +1229,26 @@ struct ContentView: View {
                     }) {
                         Label(localizedText("Restore Data", chineseText: "恢复数据"), systemImage: "arrow.up.doc")
                     }
+                    
+                    Button(action: {
+                        // Show confirmation alert before clearing data
+                        confirmClearCustomDays = true
+                    }) {
+                        Label(localizedText("Clear All Custom Days", chineseText: "清除所有自定义日期"), 
+                              systemImage: "trash")
+                            .foregroundColor(.red)
+                    }
+                    .alert(localizedText("Clear All Custom Days?", chineseText: "清除所有自定义日期？"), 
+                           isPresented: $confirmClearCustomDays) {
+                        Button(localizedText("Cancel", chineseText: "取消"), role: .cancel) {}
+                        Button(localizedText("Clear", chineseText: "清除"), role: .destructive) {
+                            clearAllCustomDays()
+                        }
+                    } message: {
+                        Text(localizedText(
+                            "This will remove all your custom day settings. Default patterns will still apply.", 
+                            chineseText: "这将删除您所有的自定义日期设置。默认模式仍将适用。"))
+                    }
                 }
                 
                 Section(header: Text(localizedText("About", chineseText: "关于"))) {
@@ -1348,6 +1371,40 @@ struct ContentView: View {
             }
         }
     }
+
+    // Add this function to your ContentView struct
+    private func clearAllCustomDays() {
+        var modifiedCount = 0
+        
+        // Update all day statuses to unmodified (0)
+        for workDay in workDays {
+            if workDay.dayStatus > 0 {
+                workDay.dayStatus = 0
+                modifiedCount += 1
+            }
+        }
+        
+        // Only save if we made changes
+        if modifiedCount > 0 {
+            do {
+                try modelContext.save()
+                print("Successfully reset \(modifiedCount) custom day states to follow default patterns")
+                
+                // Set last update time for widget syncing
+                if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+                    sharedDefaults.set(Date().timeIntervalSince1970, forKey: lastUpdateKey)
+                    sharedDefaults.synchronize()
+                }
+                
+                // Force widgets to reload
+                reloadWidgets()
+            } catch {
+                print("Failed to save after clearing custom days: \(error.localizedDescription)")
+            }
+        } else {
+            print("No custom day states needed to be reset")
+        }
+    }
 }
 
 // Modified WeekPatternEditorView with improved spacing
@@ -1425,37 +1482,37 @@ struct ShiftPatternEditorView: View {
     
     var body: some View {
         // Use ScrollView to handle longer patterns
-            let buttonSize: CGFloat = 36
-            let cirSpace: CGFloat = shiftPattern.count > 8 ? 2 : 5
+        let buttonSize: CGFloat = 36
+        let cirSpace: CGFloat = shiftPattern.count > 8 ? 2 : 5
 
-            HStack(alignment: .center, spacing: cirSpace) { // Fixed spacing of 2 points
-                ForEach(0..<shiftPattern.count, id: \.self) { index in
-                    Button {
-                        var newPattern = shiftPattern
-                        newPattern[index] = !newPattern[index]
-                        shiftPattern = newPattern
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(shiftPattern[index] ? Color.red : Color.green)
-                                .opacity(0.8)
-                                .frame(width: buttonSize, height: buttonSize)
-                            
-                            // Day number (1-based)
-                            Text("\(index + 1)")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white)
-                        }
+        HStack(alignment: .center, spacing: cirSpace) { // Fixed spacing of 2 points
+            ForEach(0..<shiftPattern.count, id: \.self) { index in
+                Button {
+                    var newPattern = shiftPattern
+                    newPattern[index] = !newPattern[index]
+                    shiftPattern = newPattern
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(shiftPattern[index] ? Color.red : Color.green)
+                            .opacity(0.8)
+                            .frame(width: buttonSize, height: buttonSize)
+                        
+                        // Day number (1-based)
+                        Text("\(index + 1)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.white)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .contentShape(Circle())
                 }
+                .buttonStyle(PlainButtonStyle())
+                .contentShape(Circle())
             }
-            .padding(.horizontal, 4)
-            .frame(height: 36)
-            .padding(.vertical, 4)
+        }
+        .padding(.horizontal, 4)
+        .frame(height: 36)
+        .padding(.vertical, 4)
 
-        .frame(height: 50) // Fixed height for the container
+    .frame(height: 50) // Fixed height for the container
     }
 }
 

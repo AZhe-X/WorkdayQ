@@ -11,12 +11,31 @@ import SwiftData
 @Model
 final class WorkDay {
     @Attribute(.unique) var date: Date
-    var isWorkDay: Bool
+    // Replace boolean with Integer status
+    // 0 = Not modified (follow pattern)
+    // 1 = User-set rest day
+    // 2 = User-set work day
+    var dayStatus: Int
     var note: String?
     
-    init(date: Date, isWorkDay: Bool = false, note: String? = nil) {
+    // For backward compatibility
+    var isWorkDay: Bool {
+        get {
+            return dayStatus == 2
+        }
+        set {
+            dayStatus = newValue ? 2 : 1
+        }
+    }
+    
+    init(date: Date, dayStatus: Int = 0, note: String? = nil) {
         self.date = date
-        self.isWorkDay = isWorkDay
+        self.dayStatus = dayStatus
         self.note = note
+    }
+    
+    // Legacy initializer for backward compatibility
+    convenience init(date: Date, isWorkDay: Bool, note: String? = nil) {
+        self.init(date: date, dayStatus: isWorkDay ? 2 : 1, note: note)
     }
 }
