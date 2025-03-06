@@ -24,6 +24,8 @@ let weekPatternKey = "weekPattern" // Add key for custom week pattern storage
 let defaultWorkdaySettingKey = "defaultWorkdaySetting" // Setting for workday pattern type (0,1,2)
 let appVersion = "0.4"
 let useDarkIconPreferenceKey = "useDarkIconPreference" // Add key for dark icon preference
+let shiftPatternKey = "shiftPattern" // Key for shift work pattern storage
+let shiftStartDateKey = "shiftStartDate" // Key for shift pattern start date
 
 // Add extension to dismiss keyboard (place after imports, before constants)
 extension View {
@@ -79,10 +81,41 @@ func isDefaultWorkDayWithUserDefineWeek(_ date: Date, pattern: [Bool]? = nil) ->
     return weekPattern[weekday - 1]
 }
 
-// Add placeholder shift function
+// Add this improved shift function to replace the placeholder
 func isDefaultWorkdayShift(_ date: Date) -> Bool {
-    // For now, just return the standard pattern while we develop this feature
-    return isDefaultWorkDayDefault(date)
+    // Get the shared pattern manager to access the shift pattern and start date
+    let patternManager = WorkdayPatternManager.shared
+    let shiftPattern = patternManager.shiftPattern
+    let shiftStartDate = patternManager.shiftStartDate
+    
+    // Ensure we have a valid pattern
+    guard !shiftPattern.isEmpty else {
+        return isDefaultWorkDayDefault(date) // Fallback to standard pattern if no shift pattern
+    }
+    
+    // Calculate days since the shift pattern start date
+    let calendar = Calendar.current
+    let startDay = calendar.startOfDay(for: shiftStartDate)
+    let targetDay = calendar.startOfDay(for: date)
+    
+    // Get days between the dates (could be negative if date is before start date)
+    let components = calendar.dateComponents([.day], from: startDay, to: targetDay)
+    guard let daysSinceStart = components.day else {
+        return isDefaultWorkDayDefault(date) // Fallback if calculation fails
+    }
+    
+    // Handle dates before the shift start date by working backwards
+    if daysSinceStart < 0 {
+        // For negative days, we need to carefully calculate the modulo
+        // to ensure we wrap around correctly in the pattern
+        let patternLength = shiftPattern.count
+        let adjustedIndex = (patternLength - (abs(daysSinceStart) % patternLength)) % patternLength
+        return shiftPattern[adjustedIndex]
+    } else {
+        // For dates on or after the shift start date, simple modulo works
+        let patternIndex = daysSinceStart % shiftPattern.count
+        return shiftPattern[patternIndex]
+    }
 }
 
 // Language options enum
@@ -142,15 +175,29 @@ class WorkdayPatternManager: ObservableObject {
     @Published var pattern: [Bool] = [false, true, true, true, true, true, false]
     @Published var workdayMode: Int = 0 // 0=default, 1=custom, 2=shift
     
+    // Add shift pattern properties
+    @Published var shiftPattern: [Bool] = [true, true, true, true, false, false, false] // Default 4-on, 3-off
+    @Published var shiftStartDate: Date = Calendar.current.startOfDay(for: Date()) // Default to today
+    
     // Load the data from UserDefaults on initialization
     init() {
         if let defaults = UserDefaults(suiteName: appGroupID) {
             // Load workday mode
             workdayMode = defaults.integer(forKey: defaultWorkdaySettingKey)
             
-            // Load pattern
+            // Load weekly pattern
             if let patternString = defaults.string(forKey: weekPatternKey) {
                 pattern = patternString.map { $0 == "1" }
+            }
+            
+            // Load shift pattern
+            if let shiftPatternString = defaults.string(forKey: shiftPatternKey) {
+                shiftPattern = shiftPatternString.map { $0 == "1" }
+            }
+            
+            // Load shift start date
+            if let shiftStartTimestamp = defaults.object(forKey: shiftStartDateKey) as? TimeInterval {
+                shiftStartDate = Date(timeIntervalSince1970: shiftStartTimestamp)
             }
         }
     }
@@ -175,6 +222,19 @@ class WorkdayPatternManager: ObservableObject {
         saveToUserDefaults()
     }
     
+    // Update shift pattern and save to UserDefaults
+    func updateShiftPattern(_ newPattern: [Bool]) {
+        guard !newPattern.isEmpty else { return }
+        shiftPattern = newPattern
+        saveToUserDefaults()
+    }
+    
+    // Update shift start date and save to UserDefaults
+    func updateShiftStartDate(_ newDate: Date) {
+        shiftStartDate = Calendar.current.startOfDay(for: newDate)
+        saveToUserDefaults()
+    }
+    
     // Save current state to UserDefaults
     private func saveToUserDefaults() {
         guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
@@ -182,9 +242,16 @@ class WorkdayPatternManager: ObservableObject {
         // Save workday mode
         defaults.set(workdayMode, forKey: defaultWorkdaySettingKey)
         
-        // Save pattern
+        // Save weekly pattern
         let patternString = pattern.map { $0 ? "1" : "0" }.joined()
         defaults.set(patternString, forKey: weekPatternKey)
+        
+        // Save shift pattern
+        let shiftPatternString = shiftPattern.map { $0 ? "1" : "0" }.joined()
+        defaults.set(shiftPatternString, forKey: shiftPatternKey)
+        
+        // Save shift start date
+        defaults.set(shiftStartDate.timeIntervalSince1970, forKey: shiftStartDateKey)
         
         // Force synchronize to ensure immediate write to disk
         defaults.synchronize()
@@ -192,7 +259,7 @@ class WorkdayPatternManager: ObservableObject {
         // Reload widgets immediately
         WidgetCenter.shared.reloadAllTimelines()
         
-        print("WorkdayPatternManager: Saved pattern \(patternString) and mode \(workdayMode)")
+        print("WorkdayPatternManager: Saved all pattern data")
     }
     
     // Add a method to explicitly reload from UserDefaults
@@ -201,15 +268,32 @@ class WorkdayPatternManager: ObservableObject {
             // Load workday mode
             workdayMode = defaults.integer(forKey: defaultWorkdaySettingKey)
             
-            // Load pattern
+            // Load weekly pattern
             if let patternString = defaults.string(forKey: weekPatternKey) {
                 pattern = patternString.map { $0 == "1" }
             } else {
                 // Default pattern if none exists
                 pattern = [false, true, true, true, true, true, false] // Sun-Sat (Sun/Sat off)
-                // Save this default
-                saveToUserDefaults()
             }
+            
+            // Load shift pattern
+            if let shiftPatternString = defaults.string(forKey: shiftPatternKey) {
+                shiftPattern = shiftPatternString.map { $0 == "1" }
+            } else {
+                // Default shift pattern if none exists
+                shiftPattern = [true, true, true, true, false, false, false] // 4 on, 3 off
+            }
+            
+            // Load shift start date
+            if let shiftStartTimestamp = defaults.object(forKey: shiftStartDateKey) as? TimeInterval {
+                shiftStartDate = Date(timeIntervalSince1970: shiftStartTimestamp)
+            } else {
+                // Default to today if none exists
+                shiftStartDate = Calendar.current.startOfDay(for: Date())
+            }
+            
+            // Save defaults if they didn't exist
+            saveToUserDefaults()
         }
     }
 }
@@ -247,6 +331,11 @@ struct ContentView: View {
     
     // 1. Add a local state to hold the holiday note (used only while note editor is open).
     @State private var holidayNote: String? = nil
+    
+    // Add these properties to ContentView struct alongside other @State variables
+    @State private var showingShiftDatePicker = false
+    @State private var editingShiftLength = false
+    @FocusState private var isShiftLengthFieldFocused: Bool // Add dedicated focus state
     
     /// UNIFIED FUNCTION: Determine if a date is a work day using the three-tier priority system
     /// 1. First check explicit user-set entry (highest priority)
@@ -736,6 +825,13 @@ struct ContentView: View {
             sharedDefaults.set(patternString, forKey: weekPatternKey)
             sharedDefaults.set(patternManager.workdayMode, forKey: defaultWorkdaySettingKey)
             
+            // Get shift pattern data from patternManager (instead of local properties)
+            let shiftPatternString = patternManager.shiftPattern.map { $0 ? "1" : "0" }.joined()
+            sharedDefaults.set(shiftPatternString, forKey: shiftPatternKey)
+            
+            // Get shift start date from patternManager (instead of local properties)
+            sharedDefaults.set(patternManager.shiftStartDate.timeIntervalSince1970, forKey: shiftStartDateKey)
+            
             sharedDefaults.synchronize()
             
             // Cache the work days data for widget fallback access
@@ -921,7 +1017,8 @@ struct ContentView: View {
                     }
                     
                     // Add new toggle for opacity differentiation
-                    Toggle(
+                    VStack(alignment: .leading) {
+                        Toggle(
                         localizedText("Highlight user-edited days", chineseText: "高亮自定义日期"),
                         isOn: $showStatusOpacityDifference
                     )
@@ -935,13 +1032,24 @@ struct ContentView: View {
                          chineseText: "开启时，自定义日期将会更明显。"))
                         .font(.caption)
                         .foregroundColor(.secondary)
+                    }
+                    
                 }
 
-                // Add this to your settingsView after the appearanceSection or another appropriate section
+                // Add this to your settingsView after the Default Workday Pattern section
                 Section(header: Text(localizedText("Default Workday Pattern", chineseText: "默认工作日模式"))) {
                     Picker(localizedText("Workday Pattern Mode", chineseText: "工作日模式"), selection: Binding(
                         get: { patternManager.workdayMode },
-                        set: { patternManager.updateMode($0) }
+                        set: { newMode in
+                            // If switching to shift mode, reset to defaults
+                            if newMode == 2 && patternManager.workdayMode != 2 {
+                                // Reset shift pattern to default 4-on, 3-off
+                                patternManager.updateShiftPattern([true, true, true, true, false, false, false])
+                                // Reset shift start date to today
+                                patternManager.updateShiftStartDate(Calendar.current.startOfDay(for: Date()))
+                            }
+                            patternManager.updateMode(newMode)
+                        }
                     )) {
                         Text(localizedText("Default", chineseText: "默认")).tag(0)
                         Text(localizedText("User Defined Week", chineseText: "自定义周")).tag(1)
@@ -952,11 +1060,6 @@ struct ContentView: View {
                     // Show week pattern editor only if User Defined Week is selected
                     if patternManager.workdayMode == 1 {
                         VStack(alignment: .leading, spacing: 8) {
-                            // Text(localizedText("Customize Your Week Pattern", chineseText: "自定义每周工作日"))
-                            //     .font(.footnote)
-                            //     .foregroundColor(.secondary)
-                            
-                            // Week pattern editor with binding to the pattern manager
                             WeekPatternEditorView(
                                 weekPattern: Binding(
                                     get: { patternManager.pattern },
@@ -967,6 +1070,66 @@ struct ContentView: View {
                             )
                         }
                         .padding(.top, 8)
+                    }
+                    
+                    // Show shift pattern editor only if Shift Work is selected
+                    if patternManager.workdayMode == 2 {
+                        // No state variables here, just use the ones from the struct
+
+                            // First row: Shift start date button and pattern length picker
+                            DatePicker(
+                                    localizedText("Shift start date", chineseText: "轮班开始日期"),
+                                    selection: Binding(
+                                        get: { patternManager.shiftStartDate },
+                                        set: { newDate in
+                                            patternManager.updateShiftStartDate(newDate)
+                                            // Auto-close the picker after selection
+                                            showingShiftDatePicker = false
+                                        }
+                                    ),
+                                    displayedComponents: .date
+                                )
+                                .datePickerStyle(.compact)
+
+                            HStack(spacing: 4) {
+                                    // Use Picker instead of nested HStack + Menu
+                                    Picker(localizedText("Length:", chineseText: "周期:"), selection: Binding(
+                                        get: { patternManager.shiftPattern.count },
+                                        set: { newLength in
+                                            var newPattern = patternManager.shiftPattern
+                                            
+                                            if newLength > newPattern.count {
+                                                // Add new days as rest days (false)
+                                                newPattern.append(contentsOf: Array(repeating: false, count: newLength - newPattern.count))
+                                            } else if newLength < newPattern.count {
+                                                // Remove days from the end
+                                                newPattern = Array(newPattern.prefix(newLength))
+                                            }
+                                            
+                                            patternManager.updateShiftPattern(newPattern)
+                                        }
+                                    )) {
+                                        ForEach(1...9, id: \.self) { length in
+                                            Text("\(length)").tag(length)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                }
+                            
+                            // Date picker (shown/hidden based on state)
+
+                            
+                            // Shift pattern editor
+                                ShiftPatternEditorView(
+                                    shiftPattern: Binding(
+                                        get: { patternManager.shiftPattern },
+                                        set: { patternManager.updateShiftPattern($0) }
+                                    ),
+                                    languagePreference: languagePreference,
+                                    workText: localizedText("Work", chineseText: "工作"),
+                                    offText: localizedText("Off", chineseText: "休息")
+                                )
+                                .frame(maxWidth: .infinity, alignment: .center)
                     }
                 }
                 
@@ -1244,6 +1407,49 @@ struct WeekPatternEditorView: View {
             let englishDays = ["S", "M", "T", "W", "T", "F", "S"]
             return englishDays[dayIndex]
         }
+    }
+}
+
+// Modified ShiftPatternEditorView with fixed spacing
+struct ShiftPatternEditorView: View {
+    @Binding var shiftPattern: [Bool]
+    let languagePreference: Int
+    let workText: String
+    let offText: String
+    
+    var body: some View {
+        // Use ScrollView to handle longer patterns
+            let buttonSize: CGFloat = 36
+            let cirSpace: CGFloat = shiftPattern.count > 8 ? 2 : 5
+
+            HStack(alignment: .center, spacing: cirSpace) { // Fixed spacing of 2 points
+                ForEach(0..<shiftPattern.count, id: \.self) { index in
+                    Button {
+                        var newPattern = shiftPattern
+                        newPattern[index] = !newPattern[index]
+                        shiftPattern = newPattern
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(shiftPattern[index] ? Color.red : Color.green)
+                                .opacity(0.8)
+                                .frame(width: buttonSize, height: buttonSize)
+                            
+                            // Day number (1-based)
+                            Text("\(index + 1)")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .contentShape(Circle())
+                }
+            }
+            .padding(.horizontal, 4)
+            .frame(height: 36)
+            .padding(.vertical, 4)
+
+        .frame(height: 50) // Fixed height for the container
     }
 }
 
