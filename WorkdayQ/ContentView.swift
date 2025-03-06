@@ -312,7 +312,7 @@ struct ContentView: View {
     @AppStorage(customWorkTermKey) private var customWorkTerm = "上班" // Default work term
     @AppStorage(appearancePreferenceKey) private var appearancePreference = 0 // Default: system
     @AppStorage(startOfWeekPreferenceKey) private var startOfWeekPreference = 0 // Default: Sunday (0)
-    @AppStorage(showStatusOpacityDifferenceKey) private var showStatusOpacityDifference = true // Default: true
+    @AppStorage(showStatusOpacityDifferenceKey) private var showStatusOpacityDifference = false // Default: false
     @FocusState private var isCustomTermFieldFocused: Bool // Add focus state
     
     // Holiday-related state
