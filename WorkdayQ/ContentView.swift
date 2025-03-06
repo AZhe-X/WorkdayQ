@@ -454,8 +454,8 @@ struct ContentView: View {
                 HStack(alignment: .top) {
                     if isEraserModeActive {
                         // Single line text for eraser mode
-                        Label(localizedText("Tap a day to reset to default pattern", 
-                                          chineseText: "点击日期以重置为默认模式"), 
+                        Label(localizedText("Tap a day to reset to default workday", 
+                                          chineseText: "点击日期以移除工作日更改"), 
                                   systemImage: "hand.tap")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -463,7 +463,7 @@ struct ContentView: View {
                     } else {
                         // Original VStack with separate labels for tap and long-press
                         VStack(alignment: .leading, spacing: 4) {
-                            Label(localizedText("Tap a day to toggle work/off status", 
+                            Label(localizedText("Tap a day to toggle work/rest status", 
                                                chineseText: "点击日期切换工作/休息状态"), 
                                   systemImage: "hand.tap")
                                 .font(.caption)
@@ -838,7 +838,6 @@ struct ContentView: View {
             existingWorkDay.note = noteText.isEmpty ? nil : noteText
         } else {
             // Create new entry with default status
-            let defaultStatus = isWorkDay(forDate: selectedDate)
             let newWorkDay = WorkDay(
                 date: selectedDate,
                 dayStatus: 0, // Unmodified - follow pattern
