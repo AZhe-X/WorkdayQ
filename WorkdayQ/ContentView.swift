@@ -22,7 +22,7 @@ let startOfWeekPreferenceKey = "startOfWeekPreference" // Add key for week start
 let showStatusOpacityDifferenceKey = "showStatusOpacityDifference" // Add key for opacity difference setting
 let weekPatternKey = "weekPattern" // Add key for custom week pattern storage
 let defaultWorkdaySettingKey = "defaultWorkdaySetting" // Setting for workday pattern type (0,1,2)
-let appVersion = "0.4"
+let appVersion = "0.5"
 let useDarkIconPreferenceKey = "useDarkIconPreference" // Add key for dark icon preference
 let shiftPatternKey = "shiftPattern" // Key for shift work pattern storage
 let shiftStartDateKey = "shiftStartDate" // Key for shift pattern start date
@@ -501,6 +501,7 @@ struct ContentView: View {
                 reloadWidgets()
             }) {
                 settingsView
+                    .preferredColorScheme(AppAppearance(rawValue: appearancePreference)?.colorScheme ?? systemColorScheme)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }
