@@ -13,6 +13,7 @@ public struct ShiftCircle: View {
     let numberOfShifts: Int
     let size: CGFloat
     let baseOpacity: Double
+    var dividerColor: Color = Color.primary.opacity(0.5)
     
     public var body: some View {
         ZStack {
@@ -28,7 +29,8 @@ public struct ShiftCircle: View {
                     shifts: shifts,
                     numberOfShifts: numberOfShifts,
                     size: size,
-                    baseOpacity: baseOpacity
+                    baseOpacity: baseOpacity,
+                    dividerColor: dividerColor
                 )
                 .rotationEffect(Angle(degrees: -30)) // Rotate the entire segment display
             }
@@ -42,6 +44,7 @@ struct ParallelDividedCircle: View {
     let numberOfShifts: Int
     let size: CGFloat
     let baseOpacity: Double
+    var dividerColor: Color = Color.primary.opacity(0.5)
     
     // Get the valid shift numbers based on numberOfShifts
     var validShiftNumbers: [Int] {
@@ -73,14 +76,14 @@ struct ParallelDividedCircle: View {
                 .frame(width: size, height: size)
             }
             
-            // Add divider lines between segments
+            // Add divider lines between segments with the specified color
             ForEach(1..<validShiftNumbers.count, id: \.self) { index in
                 // Calculate Y position for each divider
                 let yOffset = (size / CGFloat(validShiftNumbers.count)) * CGFloat(index) - (size / 2)
                 
-                // Draw a horizontal line across the circle
+                // Draw a horizontal line with the specified divider color
                 Rectangle()
-                    .fill(Color.white.opacity(0.5))
+                    .fill(dividerColor)
                     .frame(width: size, height: 1.5)
                     .offset(y: yOffset)
             }
@@ -134,6 +137,7 @@ public struct ShiftRectangle: View {
     let baseOpacity: Double
     var onShiftToggle: ((Int) -> Void)?
     var cornerRadius: CGFloat = 15
+    var dividerColor: Color = Color.primary.opacity(0.5)
     
     public var body: some View {
         ZStack {
@@ -142,12 +146,16 @@ public struct ShiftRectangle: View {
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .fill(Color.green.opacity(0.8))
                     .frame(width: width, height: height)
+            } else {
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(Color.red.opacity(0.2))
+                    .frame(width: width, height: height)
             }
             
-            // Create a container with proper corner radius
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .stroke(Color.white.opacity(0.5), lineWidth: 1)
-                .frame(width: width, height: height)
+            // // Create a container with proper corner radius using the specified divider color
+            // RoundedRectangle(cornerRadius: cornerRadius)
+            //     .stroke(dividerColor, lineWidth: 1)
+            //     .frame(width: width, height: height)
             
             // Always show interactive segment buttons, regardless of shifts
             VStack(spacing: 1) {
@@ -287,34 +295,6 @@ struct ShiftSegment: View {
             .cornerRadius(index == 0 ? cornerRadius : 0, corners: [.topLeft, .topRight])
             .cornerRadius(index == totalSegments - 1 ? cornerRadius : 0, corners: [.bottomLeft, .bottomRight])
             .frame(width: width, height: height)
-    }
-}
-
-// Divider lines view - fixed implementation with proper line count
-struct DividerLinesView: View {
-    let segmentCount: Int
-    let width: CGFloat
-    let height: CGFloat
-    
-    var body: some View {
-        ZStack {
-            // Only create segmentCount - 1 dividers
-            ForEach(0..<(segmentCount - 1), id: \.self) { index in
-                // Calculate position for each divider
-                let yPosition = (CGFloat(index + 1) * segmentHeight) + (CGFloat(index) * 1)
-                
-                Rectangle()
-                    .fill(Color.white.opacity(0.5))
-                    .frame(width: width, height: 1)
-                    .position(x: width/2, y: yPosition)
-            }
-        }
-        .frame(width: width, height: height)
-    }
-    
-    // Calculate segment height
-    private var segmentHeight: CGFloat {
-        (height - CGFloat(segmentCount - 1)) / CGFloat(segmentCount)
     }
 }
 

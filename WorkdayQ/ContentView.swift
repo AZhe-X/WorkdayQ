@@ -22,7 +22,7 @@ let startOfWeekPreferenceKey = "startOfWeekPreference" // Add key for week start
 let showStatusOpacityDifferenceKey = "showStatusOpacityDifference" // Add key for opacity difference setting
 let weekPatternKey = "weekPattern" // Add key for custom week pattern storage
 let defaultWorkdaySettingKey = "defaultWorkdaySetting" // Setting for workday pattern type (0,1,2)
-let appVersion = "0.6"
+let appVersion = "0.7"
 let useDarkIconPreferenceKey = "useDarkIconPreference" // Add key for dark icon preference
 let shiftPatternKey = "shiftPattern" // Key for shift work pattern storage
 let shiftStartDateKey = "shiftStartDate" // Key for shift pattern start date
@@ -903,7 +903,8 @@ struct ContentView: View {
                         shifts: getPartialDayShifts(forDate: Date()),  // Use this method instead
                         numberOfShifts: patternManager.numberOfShifts,
                         size: 50,
-                        baseOpacity: 0.8
+                        baseOpacity: 0.8,
+                        dividerColor: AppAppearance(rawValue: appearancePreference)?.colorScheme == .dark ? Color(red: 0.11, green: 0.11, blue: 0.12).opacity(0.5) : Color.white.opacity(0.5)
                     )
                 } else {
                     Circle()
@@ -2035,6 +2036,7 @@ struct ShiftPatternEditorView: View {
 struct PartialDayPatternEditorView: View {
     @Binding var partialDayPattern: [[Int]]
     let numberOfShifts: Int
+    @Environment(\.colorScheme) private var colorScheme // Add this line
     
     var body: some View {
         HStack(alignment: .center, spacing: partialDayPattern.count > 8 ? 2 : 5) {
@@ -2054,7 +2056,8 @@ struct PartialDayPatternEditorView: View {
                                 shifts: partialDayPattern[index],
                                 numberOfShifts: numberOfShifts,
                                 size: 36,
-                                baseOpacity: 0.8
+                                baseOpacity: 0.8,
+                                dividerColor: colorScheme == .dark ? Color.black.opacity(0.5) : Color.white.opacity(0.5)
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -2076,7 +2079,8 @@ struct PartialDayPatternEditorView: View {
                             onShiftToggle: { shiftNumber in
                                 toggleShift(for: index, shift: shiftNumber)
                             },
-                            cornerRadius: 8
+                            cornerRadius: 8,
+                            dividerColor: colorScheme == .dark ? Color.black.opacity(0.8) : Color.white.opacity(0.8)
                         )
                     }
                 }

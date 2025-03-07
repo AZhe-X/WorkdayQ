@@ -19,6 +19,7 @@ struct CustomCalendarView: View {
     @Binding var selectedDate: Date
     let workDays: [WorkDay]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.colorScheme) private var colorScheme
     
     // Language preference, start-of-week, and status opacity difference
     var languagePreference: Int = 0
@@ -231,7 +232,8 @@ struct CustomCalendarView: View {
                             shifts: shifts,
                             numberOfShifts: patternManager.numberOfShifts,
                             size: 36,
-                            baseOpacity: opacity
+                            baseOpacity: opacity,
+                            dividerColor: colorScheme == .dark ? Color.black.opacity(0.5) : Color.white.opacity(0.5)
                         )
                     } else {
                         Circle()
@@ -331,9 +333,13 @@ struct CustomCalendarView: View {
                         height: 150,
                         baseOpacity: 0.8,
                         onShiftToggle: { shiftNumber in
-                            onToggleShift?(dateToEdit, shiftNumber)
+                            // Disable animation when toggling shifts
+                            withAnimation(.none) {
+                                onToggleShift?(dateToEdit, shiftNumber)
+                            }
                         },
-                        cornerRadius: 12
+                        cornerRadius: 12,
+                        dividerColor: colorScheme == .dark ? Color.black.opacity(0.8) : Color.white.opacity(0.8)
                     )
                     // Force it to always show as a popover, not a sheet
                     .environment(\.horizontalSizeClass, .regular)
