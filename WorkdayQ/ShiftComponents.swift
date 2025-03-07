@@ -132,19 +132,24 @@ public struct ShiftRectangle: View {
     let width: CGFloat
     let height: CGFloat
     let baseOpacity: Double
-    // Add callback for handling tap events
     var onShiftToggle: ((Int) -> Void)?
-    // Add customizable corner radius
     var cornerRadius: CGFloat = 15
     
     public var body: some View {
         ZStack {
+            // Background fill - green for rest days (empty shifts)
+            if shifts?.isEmpty ?? true {
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(Color.green.opacity(0.8))
+                    .frame(width: width, height: height)
+            }
+            
             // Create a container with proper corner radius
             RoundedRectangle(cornerRadius: cornerRadius)
                 .stroke(Color.white.opacity(0.5), lineWidth: 1)
                 .frame(width: width, height: height)
             
-            // Modified approach to maintain consistent outer shape
+            // Always show interactive segment buttons, regardless of shifts
             VStack(spacing: 1) {
                 ForEach(0..<validShiftNumbers.count, id: \.self) { index in
                     let isFirst = index == 0
