@@ -1646,8 +1646,8 @@ struct ContentView: View {
                         }
                     } message: {
                         Text(localizedText(
-                            "This will remove all your custom day settings. Default patterns will still apply.", 
-                            chineseText: "这将删除您所有的自定义日期设置。默认模式仍将适用。"))
+                            "This will remove all your custom day.", 
+                            chineseText: "这将删除您所有的自定义日期。日期备注不会收到影响"))
                     }
                 }
                 

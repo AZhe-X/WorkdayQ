@@ -342,7 +342,7 @@ struct DayEntry: TimelineEntry {
         // First check if we have an explicit user record with dayStatus > 0 (highest priority)
         if let explicitDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
             if explicitDay.dayStatus > 0 {
-                return explicitDay.dayStatus == 2
+                return explicitDay.dayStatus > 1
             }
             // Otherwise, fall through for days with notes but default status
         }
@@ -368,6 +368,38 @@ struct DayEntry: TimelineEntry {
     // Add function to get system note for a date (holiday name)
     func getSystemNote(for date: Date) -> String? {
         return getHolidayInfo(for: date)?.name
+    }
+    
+    // Get partial day shifts for a particular date
+    func getPartialDayShifts(forDate date: Date) -> [Int] {
+        let calendar = Calendar.current
+        
+        // First check if we have an explicit user record
+        if let workDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+            if workDay.dayStatus == 3 && workDay.shifts != nil {
+                // Return the user-specified shifts for this partial day
+                return workDay.shifts!
+            } else if workDay.dayStatus == 2 {
+                // For a full work day, return all shifts based on the number of shifts
+                return getFullDayShifts(for: WidgetPatternManager.shared.numberOfShifts)
+            } else if workDay.dayStatus == 1 {
+                // Off day, return empty array
+                return []
+            }
+        }
+        
+        // Fall back to default pattern
+        return getDefaultPartialDayShifts(date)
+    }
+    
+    // Helper function to get all shifts for a full day
+    private func getFullDayShifts(for numberOfShifts: Int) -> [Int] {
+        switch numberOfShifts {
+        case 2: return [2, 4]          // morning and night
+        case 3: return [2, 3, 4]       // morning, noon, night
+        case 4: return [1, 2, 3, 4]    // early morning, morning, noon, night
+        default: return [2, 4]         // default to 2-shift
+        }
     }
 }
 
@@ -515,10 +547,21 @@ struct TodayWidgetView: View {
                 
                 // Only show the circle if NOT in a small widget
                 if !isSmallWidget {
-                    Circle()
-                        .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
-                        .frame(width: 50, height: 50)
-                        .padding(.bottom, 2)
+                    if WidgetPatternManager.shared.enablePartialDayFeature {
+                        ShiftCircle(
+                            shifts: entry.getPartialDayShifts(forDate: entry.date),
+                            numberOfShifts: WidgetPatternManager.shared.numberOfShifts,
+                            size: 50,
+                            baseOpacity: 0.8,
+                            dividerColor: colorScheme == .dark ? 
+                                Color(UIColor.systemGray6) : Color.white.opacity(0.5)
+                        )
+                    } else {
+                        Circle()
+                            .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
+                            .frame(width: 50, height: 50)
+                            .padding(.bottom, 2)
+                    }
                 }
             }
             
@@ -666,9 +709,20 @@ struct WeekWidgetView: View {
                 .minimumScaleFactor(0.8)
             
             ZStack {
-                Circle()
-                    .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
-                    .frame(width: isLarge ? 44 : 32, height: isLarge ? 44 : 32)
+                if WidgetPatternManager.shared.enablePartialDayFeature {
+                    ShiftCircle(
+                        shifts: entry.getPartialDayShifts(forDate: date),
+                        numberOfShifts: WidgetPatternManager.shared.numberOfShifts,
+                        size: isLarge ? 44 : 32,
+                        baseOpacity: 0.8,
+                        dividerColor: colorScheme == .dark ? 
+                            Color(UIColor.systemGray6).opacity(0.5) : Color.white.opacity(0.5)
+                    )
+                } else {
+                    Circle()
+                        .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
+                        .frame(width: isLarge ? 44 : 32, height: isLarge ? 44 : 32)
+                }
                 
                 Text("\(dayNum)")
                     .font(.system(size: isLarge ? 18 : 14, weight: .semibold))
@@ -891,6 +945,7 @@ final class WorkDay {
     @Attribute(.unique) var date: Date
     var dayStatus: Int
     var note: String?
+    var shifts: [Int]?
     
     var isWorkDay: Bool {
         return dayStatus == 2
@@ -912,7 +967,8 @@ fileprivate func convertToWorkDayStruct(_ workDayModel: WorkDay) -> WorkDayStruc
     return WorkDayStruct(
         date: workDayModel.date,
         dayStatus: workDayModel.dayStatus,
-        note: workDayModel.note
+        note: workDayModel.note,
+        shifts: workDayModel.shifts
     )
 }
 
@@ -1185,5 +1241,181 @@ func isDefaultWorkdayShift(_ date: Date) -> Bool {
         // For dates on or after the shift start date, simple modulo works
         let patternIndex = daysSinceStart % shiftPattern.count
         return shiftPattern[patternIndex]
+    }
+}
+
+// Add this function to match the one in ContentView
+func getDefaultPartialDayShifts(_ date: Date) -> [Int] {
+    let manager = WidgetPatternManager.shared
+    let partialDayPattern = manager.partialDayPattern
+    
+    guard !partialDayPattern.isEmpty else {
+        // If no pattern exists, return empty array (no shifts)
+        return []
+    }
+    
+    // The date when the pattern starts
+    let startDate = manager.shiftStartDate
+    
+    // Calculate days between start date and target date
+    let calendar = Calendar.current
+    let startDay = calendar.startOfDay(for: startDate)
+    let targetDay = calendar.startOfDay(for: date)
+    
+    // Get days between the dates
+    let components = calendar.dateComponents([.day], from: startDay, to: targetDay)
+    guard let days = components.day else {
+        return [] // Fallback if calculation fails
+    }
+    
+    // If days is negative, the date is before the start date
+    if days < 0 {
+        // For negative days, we need to calculate the modulo correctly
+        let patternLength = partialDayPattern.count
+        let adjustedIndex = (patternLength - (abs(days) % patternLength)) % patternLength
+        return partialDayPattern[adjustedIndex]
+    } else {
+        // Calculate which day in the pattern this date represents
+        let patternIndex = days % partialDayPattern.count
+        // Return the shifts for this day from the pattern
+        return partialDayPattern[patternIndex]
+    }
+}
+
+///
+///
+///
+///
+///
+///
+///
+
+//
+//  ShiftComponents.swift
+//  WorkdayQ
+//
+//  Components related to partial day shift visualization
+//
+
+import SwiftUI
+
+/// Displays a circle with segments representing different shifts in a day
+public struct ShiftCircle: View {
+    let shifts: [Int]?
+    let numberOfShifts: Int
+    let size: CGFloat
+    let baseOpacity: Double
+    var dividerColor: Color = Color.primary.opacity(0.5)
+    
+    public var body: some View {
+        ZStack {
+            // Base circle - green for rest days (empty shifts), light red background otherwise
+            Circle()
+                .fill(shifts?.isEmpty ?? true ? Color.green.opacity(0.8) : Color.red.opacity(0.4))
+                .frame(width: size, height: size)
+            
+            // Only show shift segments if there are shifts
+            if let shifts = shifts, !shifts.isEmpty {
+                // Parallel division view with rotation
+                ParallelDividedCircle(
+                    shifts: shifts,
+                    numberOfShifts: numberOfShifts,
+                    size: size,
+                    baseOpacity: baseOpacity,
+                    dividerColor: dividerColor
+                )
+                .rotationEffect(Angle(degrees: -30)) // Rotate the entire segment display
+            }
+        }
+    }
+}
+
+/// Handles the division of circle into parallel segments based on shift count
+struct ParallelDividedCircle: View {
+    let shifts: [Int]?
+    let numberOfShifts: Int
+    let size: CGFloat
+    let baseOpacity: Double
+    var dividerColor: Color = Color.primary.opacity(0.5)
+    
+    // Get the valid shift numbers based on numberOfShifts
+    var validShiftNumbers: [Int] {
+        switch numberOfShifts {
+        case 2:
+            return [2, 4]          // morning and night
+        case 3:
+            return [2, 3, 4]       // morning, noon, night
+        case 4:
+            return [1, 2, 3, 4]    // early morning, morning, noon, night
+        default:
+            return [2, 4]          // default to 2-shift
+        }
+    }
+    
+    var body: some View {
+        ZStack {
+            // Create each slice based on active shifts
+            ForEach(0..<validShiftNumbers.count, id: \.self) { index in
+                let shiftNumber = validShiftNumbers[index]
+                let isActive = shifts?.contains(shiftNumber) ?? false
+                
+                ParallelSlice(
+                    sliceNumber: index,
+                    totalSlices: validShiftNumbers.count,
+                    isActive: isActive
+                )
+                .fill(isActive ? Color.red.opacity(baseOpacity) : Color.clear)
+                .frame(width: size, height: size)
+            }
+            
+            // Add divider lines between segments with the specified color
+            ForEach(1..<validShiftNumbers.count, id: \.self) { index in
+                // Calculate Y position for each divider
+                let yOffset = (size / CGFloat(validShiftNumbers.count)) * CGFloat(index) - (size / 2)
+                
+                // Draw a horizontal line with the specified divider color
+                Rectangle()
+                    .fill(dividerColor)
+                    .frame(width: size, height: 1.5)
+                    .offset(y: yOffset)
+            }
+        }
+    }
+}
+
+/// Individual slice shape for a segment of the shift circle
+struct ParallelSlice: Shape {
+    let sliceNumber: Int
+    let totalSlices: Int
+    let isActive: Bool
+    
+    func path(in rect: CGRect) -> Path {
+        let diameter = min(rect.width, rect.height)
+        let radius = diameter / 2
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        
+        // Calculate spacing between horizontal segments
+        let sliceHeight = diameter / CGFloat(totalSlices)
+        
+        // Calculate the top position for this slice
+        let topY = center.y - radius + (sliceHeight * CGFloat(sliceNumber))
+        let bottomY = topY + sliceHeight
+        
+        // Create path for this slice
+        var path = Path()
+        
+        // Create a horizontal slice across the circle
+        let leftX = center.x - radius
+        let rightX = center.x + radius
+        
+        path.move(to: CGPoint(x: leftX, y: topY))
+        path.addLine(to: CGPoint(x: rightX, y: topY))
+        path.addLine(to: CGPoint(x: rightX, y: bottomY))
+        path.addLine(to: CGPoint(x: leftX, y: bottomY))
+        path.closeSubpath()
+        
+        // Intersect with circle
+        let circlePath = Path(ellipseIn: rect)
+        return path.intersection(circlePath)
     }
 }
