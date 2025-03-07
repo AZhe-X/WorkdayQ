@@ -1218,8 +1218,8 @@ struct ContentView: View {
             List {
 
                 // holidays Sync Settings
-                Section(header: Text(localizedText("Holidays", chineseText: "节假日"))) {
-                    Picker(localizedText("Holiday Calendar", chineseText: "节假日日历"), selection: $holidayPreference) {
+                Section(header: Text(localizedText("Holidays", chineseText: "节假日和调休"))) {
+                    Picker(localizedText("Setting Holiday", chineseText: "设置节假日和调休"), selection: $holidayPreference) {
                         ForEach(HolidayPreference.allCases) { preference in
                             Text(localizedText(preference.localizedName.english, chineseText: preference.localizedName.chinese)).tag(preference.rawValue)
                         }
@@ -1409,7 +1409,7 @@ struct ContentView: View {
                                     Text("3 \(localizedText("Shifts", chineseText: "班次"))").tag(3)
                                     Text("4 \(localizedText("Shifts", chineseText: "班次"))").tag(4)
                                 } label: {
-                                    Text(localizedText("Number of Shifts", chineseText: "班次数量"))
+                                    Text(localizedText("Number of Shifts", chineseText: "每日班次数量"))
                                 }
                                 .pickerStyle(.segmented)
                                 .onChange(of: patternManager.numberOfShifts) { _, _ in
@@ -1791,6 +1791,11 @@ struct ContentView: View {
         if let existingWorkDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
             // Reset the status to 0 (follow default pattern)
             existingWorkDay.dayStatus = 0
+            
+            // Also reset any partial day shifts if that feature is enabled
+            if patternManager.enablePartialDayFeature {
+                existingWorkDay.shifts = [] // Clear all shifts
+            }
             
             // Try to save changes
             do {

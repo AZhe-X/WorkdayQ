@@ -279,23 +279,29 @@ struct CustomCalendarView: View {
                         selectedDate = date
                         onCycleShifts?(date)
                     } else {
-                        // For 3+ shifts, ensure stable popover behavior
+                        // For 3+ shifts: check if eraser mode is active
                         selectedDate = date
                         
-                        // First ensure any existing popover is dismissed
-                        if showingShiftEditor {
-                            showingShiftEditor = false
-                            
-                            // Use a short delay before showing the new popover
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                        if isEraserModeActive {
+                            // In eraser mode, directly trigger the reset function
+                            onCycleShifts?(date) // This will call resetDayStatus in ContentView
+                        } else {
+                            // Normal mode: show popover for editing
+                            // First ensure any existing popover is dismissed
+                            if showingShiftEditor {
+                                showingShiftEditor = false
+                                
+                                // Use a short delay before showing the new popover
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                    dateForShiftEditor = date
+                                    isPopoverStable = true
+                                    showingShiftEditor = true
+                                }
+                            } else {
                                 dateForShiftEditor = date
                                 isPopoverStable = true
                                 showingShiftEditor = true
                             }
-                        } else {
-                            dateForShiftEditor = date
-                            isPopoverStable = true
-                            showingShiftEditor = true
                         }
                     }
                 } else {
@@ -344,7 +350,7 @@ struct CustomCalendarView: View {
                     // Force it to always show as a popover, not a sheet
                     .environment(\.horizontalSizeClass, .regular)
                     // Set fixed size to prevent adaptive behavior
-                    .frame(width: 85, height: 152)
+                    .frame(width: 85, height: 150)
                     // Ensure proper presentation style
                     .presentationCompactAdaptation(.none)
                     // Explicitly set detent to prevent full screen
