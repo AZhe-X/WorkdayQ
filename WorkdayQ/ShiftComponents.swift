@@ -134,11 +134,13 @@ public struct ShiftRectangle: View {
     let baseOpacity: Double
     // Add callback for handling tap events
     var onShiftToggle: ((Int) -> Void)?
+    // Add customizable corner radius
+    var cornerRadius: CGFloat = 15
     
     public var body: some View {
         ZStack {
             // Create a container with proper corner radius
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: cornerRadius)
                 .stroke(Color.white.opacity(0.5), lineWidth: 1)
                 .frame(width: width, height: height)
             
@@ -158,12 +160,12 @@ public struct ShiftRectangle: View {
                         // Create a segment with appropriate corner radius
                         if isFirst {
                             // Top segment - round top corners only
-                            RoundedCorners(tl: 8, tr: 8, bl: 0, br: 0)
+                            RoundedCorners(tl: cornerRadius, tr: cornerRadius, bl: 0, br: 0)
                                 .fill(isActive ? Color.red.opacity(baseOpacity) : Color.red.opacity(0.1))
                                 .frame(height: segmentHeight)
                         } else if isLast {
                             // Bottom segment - round bottom corners only
-                            RoundedCorners(tl: 0, tr: 0, bl: 8, br: 8)
+                            RoundedCorners(tl: 0, tr: 0, bl: cornerRadius, br: cornerRadius)
                                 .fill(isActive ? Color.red.opacity(baseOpacity) : Color.red.opacity(0.1))
                                 .frame(height: segmentHeight)
                         } else {
@@ -270,14 +272,15 @@ struct ShiftSegment: View {
     let width: CGFloat
     let height: CGFloat
     let baseOpacity: Double
+    var cornerRadius: CGFloat = 8
     
     var body: some View {
         // First create the base shape with fill
         RoundedRectangle(cornerRadius: 0)
             .fill(isActive ? Color.red.opacity(baseOpacity) : Color.red.opacity(0.1))
             // Then apply corner radius to top/bottom corners
-            .cornerRadius(index == 0 ? 8 : 0, corners: [.topLeft, .topRight])
-            .cornerRadius(index == totalSegments - 1 ? 8 : 0, corners: [.bottomLeft, .bottomRight])
+            .cornerRadius(index == 0 ? cornerRadius : 0, corners: [.topLeft, .topRight])
+            .cornerRadius(index == totalSegments - 1 ? cornerRadius : 0, corners: [.bottomLeft, .bottomRight])
             .frame(width: width, height: height)
     }
 }

@@ -35,6 +35,7 @@ struct CustomCalendarView: View {
     var onToggleWorkStatus: ((Date) -> Void)?
     var onOpenNoteEditor: ((Date) -> Void)?
     var onCycleShifts: ((Date) -> Void)?
+    var onToggleShift: ((Date, Int) -> Void)?
     
     // Internal state for updating the displayed month
     @State private var currentMonth = Date()
@@ -51,6 +52,11 @@ struct CustomCalendarView: View {
     @State private var isShowingMonthSelection = false  // Track if we're showing month selection
     @State private var yearForMonthSelection = Date()   // The year we're viewing in month selection
     @State private var yearSlideDirection: SlideDirection = .none  // For year navigation
+
+    // Add these state variables to the CustomCalendarView struct
+    @State private var showingShiftEditor = false
+    @State private var dateForShiftEditor: Date?
+    @State private var isPopoverStable = true // Add this to track popover stability
 
     // Now accept a month Date parameter so we can show different months
     private func calendarContent(for displayMonth: Date) -> some View {
@@ -207,6 +213,9 @@ struct CustomCalendarView: View {
         
         // Check if the day is in the currently displayed month
         let isInCurrentMonth = date.monthInt == currentMonth.monthInt
+        
+        // Move this here so we can trigger the popover from this specific date
+        let isCurrentDateForEditor = dateForShiftEditor != nil && Calendar.current.isDate(date, inSameDayAs: dateForShiftEditor!)
 
         let workDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) })
         
@@ -266,12 +275,26 @@ struct CustomCalendarView: View {
                 if patternManager.enablePartialDayFeature {
                     if patternManager.numberOfShifts == 2 {
                         selectedDate = date
-                        // Add a callback specifically for 2-shift cycling
                         onCycleShifts?(date)
                     } else {
-                        // For 3+ shifts, we'll use the ShiftRectangle for direct manipulation
+                        // For 3+ shifts, ensure stable popover behavior
                         selectedDate = date
-                        // toggle a pop up Shift retangular
+                        
+                        // First ensure any existing popover is dismissed
+                        if showingShiftEditor {
+                            showingShiftEditor = false
+                            
+                            // Use a short delay before showing the new popover
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                dateForShiftEditor = date
+                                isPopoverStable = true
+                                showingShiftEditor = true
+                            }
+                        } else {
+                            dateForShiftEditor = date
+                            isPopoverStable = true
+                            showingShiftEditor = true
+                        }
                     }
                 } else {
                     selectedDate = date
@@ -292,6 +315,37 @@ struct CustomCalendarView: View {
                 
                 selectedDate = date
                 onOpenNoteEditor?(date)
+            }
+        }
+        // Move the popover to be triggered for this specific day only
+        .popover(isPresented: Binding<Bool>(
+            get: { isCurrentDateForEditor && showingShiftEditor },
+            set: { showingShiftEditor = $0 }
+        ), arrowEdge: .bottom) {
+            if let dateToEdit = dateForShiftEditor {
+                if let shifts = getPartialDayShiftsFunction?(dateToEdit) {
+                    ShiftRectangle(
+                        shifts: shifts,
+                        numberOfShifts: patternManager.numberOfShifts,
+                        width: 85,
+                        height: 150,
+                        baseOpacity: 0.8,
+                        onShiftToggle: { shiftNumber in
+                            onToggleShift?(dateToEdit, shiftNumber)
+                        },
+                        cornerRadius: 12
+                    )
+                    // Force it to always show as a popover, not a sheet
+                    .environment(\.horizontalSizeClass, .regular)
+                    // Set fixed size to prevent adaptive behavior
+                    .frame(width: 85, height: 152)
+                    // Ensure proper presentation style
+                    .presentationCompactAdaptation(.none)
+                    // Explicitly set detent to prevent full screen
+                    .presentationDetents([.height(160)])
+                    // Remove any system padding
+                    .padding(0)
+                }
             }
         }
     }

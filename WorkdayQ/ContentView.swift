@@ -675,6 +675,21 @@ struct ContentView: View {
                             updateDayShifts2Ver(date: date)
                         }
                         
+                    },
+                    onToggleShift: { date, shiftNumber in
+                        // Get current shifts for this date
+                        var currentShifts = getPartialDayShifts(forDate: date)
+                        
+                        // Toggle the shift
+                        if currentShifts.contains(shiftNumber) {
+                            currentShifts.removeAll { $0 == shiftNumber }
+                        } else {
+                            currentShifts.append(shiftNumber)
+                            currentShifts.sort()
+                        }
+                        
+                        // Update the WorkDay with new shifts
+                        updateDayShifts(date, shifts: currentShifts)
                     }
                 )
                 
@@ -2060,7 +2075,8 @@ struct PartialDayPatternEditorView: View {
                             baseOpacity: 0.8,
                             onShiftToggle: { shiftNumber in
                                 toggleShift(for: index, shift: shiftNumber)
-                            }
+                            },
+                            cornerRadius: 8
                         )
                     }
                 }
