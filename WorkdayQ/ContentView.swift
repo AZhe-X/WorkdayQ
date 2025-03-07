@@ -504,6 +504,8 @@ class WorkdayPatternManager: ObservableObject {
         
         // Save changes to UserDefaults
         saveToUserDefaults()
+
+
     }
 }
 
@@ -883,16 +885,16 @@ struct ContentView: View {
                 if patternManager.enablePartialDayFeature {
                     // Use the original ShiftCircle from CustomCalendarView instead of AppCardShiftCircle
                     ShiftCircle(
-                        shifts: getDefaultPartialDayShifts(Date()),
+                        shifts: getPartialDayShifts(forDate: Date()),  // Use this method instead
                         numberOfShifts: patternManager.numberOfShifts,
                         size: 50,
                         baseOpacity: 0.8
                     )
                 } else {
                     Circle()
-                    .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
-                    .frame(width: 50, height: 50)
-                    .padding(.bottom, 1)
+                        .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
+                        .frame(width: 50, height: 50)
+                        .padding(.bottom, 1)
                 }
             }
             

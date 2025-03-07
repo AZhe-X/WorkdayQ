@@ -271,6 +271,7 @@ struct CustomCalendarView: View {
                     } else {
                         // For 3+ shifts, we'll use the ShiftRectangle for direct manipulation
                         selectedDate = date
+                        // toggle a pop up Shift retangular
                     }
                 } else {
                     selectedDate = date
