@@ -26,6 +26,9 @@ let appVersion = "0.6"
 let useDarkIconPreferenceKey = "useDarkIconPreference" // Add key for dark icon preference
 let shiftPatternKey = "shiftPattern" // Key for shift work pattern storage
 let shiftStartDateKey = "shiftStartDate" // Key for shift pattern start date
+let numberOfShiftsKey = "numberOfShifts" // Key for number of shifts (2, 3, or 4)
+let enablePartialDayFeatureKey = "enablePartialDayFeature" // Key for enabling partial day features
+let partialDayPatternKey = "partialDayPattern" // Key for partial day shift patterns
 
 // Add extension to dismiss keyboard (place after imports, before constants)
 extension View {
@@ -118,6 +121,48 @@ func isDefaultWorkdayShift(_ date: Date) -> Bool {
     }
 }
 
+/// Returns the default shifts for a specific date based on the partial day pattern
+func getDefaultPartialDayShifts(_ date: Date) -> [Int] {
+    let manager = WorkdayPatternManager.shared
+    let partialDayPattern = manager.partialDayPattern
+    
+    guard !partialDayPattern.isEmpty else {
+        // If no pattern exists, return empty array (no shifts)
+        return []
+    }
+    
+    // The date when the pattern starts
+    let startDate = manager.shiftStartDate
+    
+    // Calculate days between start date and target date
+    let calendar = Calendar.current
+    let days = calendar.dateComponents([.day], from: startDate, to: date).day ?? 0
+    
+    // If days is negative, the date is before the start date
+    if days < 0 {
+        // Return empty array for dates before the pattern start
+        return []
+    }
+    
+    // Calculate which day in the pattern this date represents
+    let patternIndex = days % partialDayPattern.count
+    
+    // Return the shifts for this day from the pattern
+    return partialDayPattern[patternIndex]
+}
+
+// Updated helper function to determine if a date has a specific shift
+func hasShift(_ date: Date, shift: Int, workDays: [WorkDay] = []) -> Bool {
+    // This references the non-existent global function, which is causing the error
+    // let shifts = getPartialDayShifts(for: date, workDays: workDays)
+    
+    // We need to use the default pattern function directly instead
+    let shifts = getDefaultPartialDayShifts(date)
+    
+    // Check if the requested shift is included
+    return shifts.contains(shift)
+}
+
 // Language options enum
 enum AppLanguage: Int, CaseIterable, Identifiable {
     case systemDefault = 0
@@ -179,6 +224,20 @@ class WorkdayPatternManager: ObservableObject {
     @Published var shiftPattern: [Bool] = [true, true, true, true, false, false, false] // Default 4-on, 3-off
     @Published var shiftStartDate: Date = Calendar.current.startOfDay(for: Date()) // Default to today
     
+    // Add the numberOfShifts property
+    @Published var numberOfShifts: Int = 2 // Default to 2 shifts
+    
+    // Add the partial day feature toggle
+    @Published var enablePartialDayFeature: Bool = false // Default to disabled
+    
+    // Add the partial day pattern property
+    // This is an array of arrays, where each inner array contains the shifts for a day in the pattern
+    @Published var partialDayPattern: [[Int]] = [
+        [2, 4], // Default pattern: Day 1 - morning and night shifts
+        [3],    // Day 2 - noon shift only
+        []      // Day 3 - rest day (no shifts)
+    ]
+    
     // Load the data from UserDefaults on initialization
     init() {
         if let defaults = UserDefaults(suiteName: appGroupID) {
@@ -198,6 +257,21 @@ class WorkdayPatternManager: ObservableObject {
             // Load shift start date
             if let shiftStartTimestamp = defaults.object(forKey: shiftStartDateKey) as? TimeInterval {
                 shiftStartDate = Date(timeIntervalSince1970: shiftStartTimestamp)
+            }
+            
+            // Load number of shifts (default to 2 if not set)
+            numberOfShifts = defaults.integer(forKey: numberOfShiftsKey)
+            if numberOfShifts < 2 || numberOfShifts > 4 {
+                numberOfShifts = 2 // Ensure valid range
+            }
+            
+            // Load partial day feature setting
+            enablePartialDayFeature = defaults.bool(forKey: enablePartialDayFeatureKey)
+            
+            // Load partial day pattern
+            if let patternData = defaults.data(forKey: partialDayPatternKey),
+               let decodedPattern = try? JSONDecoder().decode([[Int]].self, from: patternData) {
+                partialDayPattern = decodedPattern
             }
         }
     }
@@ -236,7 +310,7 @@ class WorkdayPatternManager: ObservableObject {
     }
     
     // Save current state to UserDefaults
-    private func saveToUserDefaults() {
+    func saveToUserDefaults() {
         guard let defaults = UserDefaults(suiteName: appGroupID) else { return }
         
         // Save workday mode
@@ -252,6 +326,17 @@ class WorkdayPatternManager: ObservableObject {
         
         // Save shift start date
         defaults.set(shiftStartDate.timeIntervalSince1970, forKey: shiftStartDateKey)
+        
+        // Save number of shifts
+        defaults.set(numberOfShifts, forKey: numberOfShiftsKey)
+        
+        // Save partial day feature setting
+        defaults.set(enablePartialDayFeature, forKey: enablePartialDayFeatureKey)
+        
+        // Save partial day pattern
+        if let encodedPattern = try? JSONEncoder().encode(partialDayPattern) {
+            defaults.set(encodedPattern, forKey: partialDayPatternKey)
+        }
         
         // Force synchronize to ensure immediate write to disk
         defaults.synchronize()
@@ -292,9 +377,124 @@ class WorkdayPatternManager: ObservableObject {
                 shiftStartDate = Calendar.current.startOfDay(for: Date())
             }
             
+            // Load number of shifts (default to 2 if not set)
+            numberOfShifts = defaults.integer(forKey: numberOfShiftsKey)
+            if numberOfShifts < 2 || numberOfShifts > 4 {
+                numberOfShifts = 2 // Ensure valid range
+            }
+            
+            // Load partial day feature setting
+            enablePartialDayFeature = defaults.bool(forKey: enablePartialDayFeatureKey)
+            
+            // Load partial day pattern
+            if let patternData = defaults.data(forKey: partialDayPatternKey),
+               let decodedPattern = try? JSONDecoder().decode([[Int]].self, from: patternData) {
+                partialDayPattern = decodedPattern
+            } else {
+                // Default pattern if none exists
+                partialDayPattern = [[2, 4], [2, 4],[2, 4],[2, 4], [],[],[]]
+            }
+            
             // Save defaults if they didn't exist
             saveToUserDefaults()
         }
+    }
+    
+    // Add a method to toggle the partial day feature
+    func togglePartialDayFeature() {
+        enablePartialDayFeature.toggle()
+        saveToUserDefaults()
+    }
+
+    // Convert from shift pattern (Boolean array) to partial day pattern (array of Int arrays)
+    func convertShiftToPartialDayPattern() {
+        // Create a new partial day pattern based on the shift pattern
+        var newPartialDayPattern: [[Int]] = []
+        
+        // Get the valid shift numbers based on numberOfShifts
+        let validShifts: [Int] = {
+            switch numberOfShifts {
+            case 2: return [2, 4]          // morning and night
+            case 3: return [2, 3, 4]       // morning, noon, night
+            case 4: return [1, 2, 3, 4]    // early morning, morning, noon, night
+            default: return [2, 4]         // default to 2-shift
+            }
+        }()
+        
+        // For each day in the shift pattern
+        for isWorkDay in shiftPattern {
+            if isWorkDay {
+                // If it's a work day, assign all available shifts by default
+                newPartialDayPattern.append(validShifts)
+            } else {
+                // If it's a rest day, create an empty array
+                newPartialDayPattern.append([])
+            }
+        }
+        
+        // Update the partial day pattern
+        partialDayPattern = newPartialDayPattern
+    }
+
+    // Convert from partial day pattern (array of Int arrays) to shift pattern (Boolean array)
+    func convertPartialDayToShiftPattern() {
+        // Create a new shift pattern based on the partial day pattern
+        var newShiftPattern: [Bool] = []
+        
+        // For each day in the partial day pattern
+        for dayShifts in partialDayPattern {
+            // If the day has any shifts, it's a work day
+            newShiftPattern.append(!dayShifts.isEmpty)
+        }
+        
+        // If the partial day pattern is empty or of different length, maintain the current shift pattern
+        if newShiftPattern.isEmpty || newShiftPattern.count != shiftPattern.count {
+            return
+        }
+        
+        // Update the shift pattern
+        shiftPattern = newShiftPattern
+    }
+
+    // Update the partial day feature toggle to trigger conversions
+    func updatePartialDayFeature(enabled: Bool) {
+        // If the feature is being enabled
+        if enabled && !enablePartialDayFeature {
+            // Convert from shift pattern to partial day pattern
+            convertShiftToPartialDayPattern()
+        }
+        // If the feature is being disabled
+        else if !enabled && enablePartialDayFeature {
+            // Convert from partial day pattern to shift pattern
+            convertPartialDayToShiftPattern()
+        }
+        
+        // Update the setting
+        enablePartialDayFeature = enabled
+        
+        // Save changes
+        saveToUserDefaults()
+    }
+
+    // Add this method to the WorkdayPatternManager class
+    func updatePartialDayPattern(_ newPattern: [[Int]]) {
+        // Update the partial day pattern
+        partialDayPattern = newPattern
+        
+        // Also update the shift pattern to keep them in sync
+        // A day is a work day if it has any shifts
+        var newShiftPattern = [Bool]()
+        for dayShifts in newPattern {
+            newShiftPattern.append(!dayShifts.isEmpty)
+        }
+        
+        // Only update if the length matches to avoid corrupting existing pattern
+        if newShiftPattern.count == shiftPattern.count {
+            shiftPattern = newShiftPattern
+        }
+        
+        // Save changes to UserDefaults
+        saveToUserDefaults()
     }
 }
 
@@ -354,7 +554,7 @@ struct ContentView: View {
         if let existingWorkDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
             // Only use the stored status if user explicitly set it
             if existingWorkDay.dayStatus > 0 {
-                return existingWorkDay.dayStatus == 2
+                return existingWorkDay.dayStatus > 1
             }
             // Otherwise, fall through to use default pattern (for days with notes but default status)
         }
@@ -426,10 +626,18 @@ struct ContentView: View {
                     workDays: workDays,
                     languagePreference: languagePreference,
                     startOfWeekPreference: startOfWeekPreference,
-                    showStatusOpacityDifference: showStatusOpacityDifference || isEraserModeActive, // Force show in eraser mode
+                    showStatusOpacityDifference: showStatusOpacityDifference,
                     patternManager: patternManager,
-                    isEraserModeActive: isEraserModeActive, // Add this parameter
+                    isEraserModeActive: isEraserModeActive,
+                    isWorkDayFunction: { date in
+                        // Remove [weak self] - not needed for structs
+                        isWorkDay(forDate: date)
+                    },
+                    getPartialDayShiftsFunction: { date in
+                        getPartialDayShifts(forDate: date)
+                    },
                     onToggleWorkStatus: { date in
+                        // Revert to the original implementation
                         if isEraserModeActive {
                             resetDayStatus(date)
                         } else {
@@ -437,6 +645,7 @@ struct ContentView: View {
                         }
                     },
                     onOpenNoteEditor: { date in
+                        // Revert to the original implementation
                         selectedDate = date
                         
                         // Get existing note if any
@@ -654,10 +863,20 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                Circle()
+                if patternManager.enablePartialDayFeature {
+                    // Use the original ShiftCircle from CustomCalendarView instead of AppCardShiftCircle
+                    ShiftCircle(
+                        shifts: getDefaultPartialDayShifts(Date()),
+                        numberOfShifts: patternManager.numberOfShifts,
+                        size: 50,
+                        baseOpacity: 0.8
+                    )
+                } else {
+                    Circle()
                     .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
                     .frame(width: 50, height: 50)
                     .padding(.bottom, 1)
+                }
             }
             
             if let note = todayWorkDay?.note, !note.isEmpty {
@@ -892,6 +1111,17 @@ struct ContentView: View {
             // Get shift start date from patternManager (instead of local properties)
             sharedDefaults.set(patternManager.shiftStartDate.timeIntervalSince1970, forKey: shiftStartDateKey)
             
+            // Get number of shifts from patternManager (instead of local properties)
+            sharedDefaults.set(patternManager.numberOfShifts, forKey: numberOfShiftsKey)
+            
+            // Get partial day feature setting
+            sharedDefaults.set(patternManager.enablePartialDayFeature, forKey: enablePartialDayFeatureKey)
+            
+            // Get partial day pattern
+            if let encodedPattern = try? JSONEncoder().encode(patternManager.partialDayPattern) {
+                sharedDefaults.set(encodedPattern, forKey: partialDayPatternKey)
+            }
+            
             sharedDefaults.synchronize()
             
             // Cache the work days data for widget fallback access
@@ -1069,17 +1299,30 @@ struct ContentView: View {
                                     Picker(localizedText("Length:", chineseText: "周期:"), selection: Binding(
                                         get: { patternManager.shiftPattern.count },
                                         set: { newLength in
-                                            var newPattern = patternManager.shiftPattern
+                                            var newShiftPattern = patternManager.shiftPattern
+                                            var newPartialDayPattern = patternManager.partialDayPattern
                                             
-                                            if newLength > newPattern.count {
+                                            // Update shift pattern length
+                                            if newLength > newShiftPattern.count {
                                                 // Add new days as rest days (false)
-                                                newPattern.append(contentsOf: Array(repeating: false, count: newLength - newPattern.count))
-                                            } else if newLength < newPattern.count {
+                                                newShiftPattern.append(contentsOf: Array(repeating: false, count: newLength - newShiftPattern.count))
+                                            } else if newLength < newShiftPattern.count {
                                                 // Remove days from the end
-                                                newPattern = Array(newPattern.prefix(newLength))
+                                                newShiftPattern = Array(newShiftPattern.prefix(newLength))
                                             }
                                             
-                                            patternManager.updateShiftPattern(newPattern)
+                                            // Update partial day pattern length to match
+                                            if newLength > newPartialDayPattern.count {
+                                                // Add new days as rest days (empty arrays)
+                                                newPartialDayPattern.append(contentsOf: Array(repeating: [], count: newLength - newPartialDayPattern.count))
+                                            } else if newLength < newPartialDayPattern.count {
+                                                // Remove days from the end
+                                                newPartialDayPattern = Array(newPartialDayPattern.prefix(newLength))
+                                            }
+                                            
+                                            // Update both patterns
+                                            patternManager.updateShiftPattern(newShiftPattern)
+                                            patternManager.updatePartialDayPattern(newPartialDayPattern)
                                         }
                                     )) {
                                         ForEach(1...9, id: \.self) { length in
@@ -1093,6 +1336,16 @@ struct ContentView: View {
 
                             
                             // Shift pattern editor
+                            if patternManager.enablePartialDayFeature {
+                                PartialDayPatternEditorView(
+                                    partialDayPattern: Binding(
+                                        get: { patternManager.partialDayPattern },
+                                        set: { patternManager.updatePartialDayPattern($0) }
+                                    ),
+                                    numberOfShifts: patternManager.numberOfShifts
+                                )
+                                .frame(maxWidth: .infinity, alignment: .center)
+                            } else {
                                 ShiftPatternEditorView(
                                     shiftPattern: Binding(
                                         get: { patternManager.shiftPattern },
@@ -1103,6 +1356,31 @@ struct ContentView: View {
                                     offText: localizedText("Off", chineseText: "休息")
                                 )
                                 .frame(maxWidth: .infinity, alignment: .center)
+                            }
+                                
+
+                            // After the ShiftPatternEditorView, add:
+                            Toggle(isOn: Binding(
+                                get: { patternManager.enablePartialDayFeature },
+                                set: { patternManager.updatePartialDayFeature(enabled: $0) }
+                            )) {
+                                Text(localizedText("Enable Partial Day Shifts", chineseText: "启用分段工作日"))
+                            }
+
+                            // Only show the shift count picker when partial day is enabled and in shift mode
+                            if patternManager.enablePartialDayFeature && patternManager.workdayMode == 2 {
+                                Picker(selection: $patternManager.numberOfShifts) {
+                                    Text("2 \(localizedText("Shifts", chineseText: "班次"))").tag(2)
+                                    Text("3 \(localizedText("Shifts", chineseText: "班次"))").tag(3)
+                                    Text("4 \(localizedText("Shifts", chineseText: "班次"))").tag(4)
+                                } label: {
+                                    Text(localizedText("Number of Shifts", chineseText: "班次数量"))
+                                }
+                                .pickerStyle(.segmented)
+                                .onChange(of: patternManager.numberOfShifts) { _, _ in
+                                    patternManager.saveToUserDefaults()
+                                }
+                            }
                     }
                 }
 
@@ -1156,6 +1434,7 @@ struct ContentView: View {
                                             }
                                         }
                                     }
+                                    
                                     .onSubmit {
                                         // Hide keyboard when user presses "Done" on keyboard
                                         isCustomTermFieldFocused = false
@@ -1495,6 +1774,45 @@ struct ContentView: View {
             }
         }
     }
+
+    // Move the global getPartialDayShifts function to be a method inside ContentView
+    func getPartialDayShifts(forDate date: Date) -> [Int] {
+        // First check if this date has been manually set in the database
+        if let workDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
+            // If this day was explicitly set by user
+            if workDay.dayStatus > 0 {
+                if workDay.dayStatus == 3 && workDay.shifts != nil {
+                    // Return the user-specified shifts for this partial day
+                    return workDay.shifts!
+                } else if workDay.dayStatus == 2 {
+                    // For a full work day, return all shifts based on the number of shifts
+                    return getFullDayShifts(for: patternManager.numberOfShifts)
+                } else {
+                    // Off day, return empty array
+                    return []
+                }
+            }
+        }
+        
+        // If no user-edited data found, fall back to default pattern
+        return getDefaultPartialDayShifts(date)
+    }
+    
+    // Helper function for getPartialDayShifts
+    private func getFullDayShifts(for numberOfShifts: Int) -> [Int] {
+        switch numberOfShifts {
+        case 2: return [2, 4]          // morning and night
+        case 3: return [2, 3, 4]       // morning, noon, night
+        case 4: return [1, 2, 3, 4]    // early morning, morning, noon, night
+        default: return [2, 4]         // default to 2-shift
+        }
+    }
+    
+    // Updated hasShift function to match the pattern
+    func hasShift(forDate date: Date, shift: Int) -> Bool {
+        let shifts = getPartialDayShifts(forDate: date)
+        return shifts.contains(shift)
+    }
 }
 
 // Modified WeekPatternEditorView with improved spacing
@@ -1571,7 +1889,7 @@ struct ShiftPatternEditorView: View {
     let offText: String
     
     var body: some View {
-        // Use ScrollView to handle longer patterns
+
         let buttonSize: CGFloat = 36
         let cirSpace: CGFloat = shiftPattern.count > 8 ? 2 : 5
 
@@ -1603,6 +1921,116 @@ struct ShiftPatternEditorView: View {
         .padding(.vertical, 4)
 
     .frame(height: 50) // Fixed height for the container
+    }
+}
+
+// Add this struct after ShiftPatternEditorView
+struct PartialDayPatternEditorView: View {
+    @Binding var partialDayPattern: [[Int]]
+    let numberOfShifts: Int
+    
+    var body: some View {
+        HStack(alignment: .center, spacing: partialDayPattern.count > 8 ? 2 : 5) {
+            ForEach(0..<partialDayPattern.count, id: \.self) { index in
+                if numberOfShifts == 2 {
+                    // 2-shift version: ShiftCircle with cycling states
+                    VStack(spacing: 2) {
+                        // Day number (1-based)
+                        Text("\(index + 1)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        Button {
+                            cycleDayState(for: index)
+                        } label: {
+                            ShiftCircle(
+                                shifts: partialDayPattern[index],
+                                numberOfShifts: numberOfShifts,
+                                size: 36,
+                                baseOpacity: 0.8
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                } else {
+                    // 3 or 4 shift version: Enhanced ShiftRectangle with tappable segments
+                    VStack(spacing: 2) {
+                        // Day number (1-based)
+                        Text("\(index + 1)")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.primary)
+                        
+                        ShiftRectangle(
+                            shifts: partialDayPattern[index],
+                            numberOfShifts: numberOfShifts,
+                            width: 36, 
+                            height: 100,
+                            baseOpacity: 0.8,
+                            onShiftToggle: { shiftNumber in
+                                toggleShift(for: index, shift: shiftNumber)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .frame(height: numberOfShifts > 2 ? 130 : 60)
+        .padding(.vertical, 4)
+    }
+    
+    // Get the valid shift numbers based on numberOfShifts
+    var validShiftNumbers: [Int] {
+        switch numberOfShifts {
+        case 2: return [2, 4]          // morning and night
+        case 3: return [2, 3, 4]       // morning, noon, night
+        case 4: return [1, 2, 3, 4]    // early morning, morning, noon, night
+        default: return [2, 4]         // default to 2-shift
+        }
+    }
+    
+    // Function to cycle through states for 2-shift mode
+    private func cycleDayState(for index: Int) {
+        var currentShifts = partialDayPattern[index]
+        
+        // Determine current state and cycle to next state
+        if currentShifts.isEmpty {
+            // From rest -> full day (all shifts)
+            currentShifts = validShiftNumbers
+        } else if currentShifts.count == validShiftNumbers.count {
+            // From full day -> morning only
+            currentShifts = [2] // Morning shift only
+        } else if currentShifts.contains(2) && !currentShifts.contains(4) {
+            // From morning only -> night only
+            currentShifts = [4] // Night shift only
+        } else {
+            // From night only (or any other state) -> rest
+            currentShifts = []
+        }
+        
+        // Update the pattern
+        var newPattern = partialDayPattern
+        newPattern[index] = currentShifts
+        partialDayPattern = newPattern
+    }
+    
+    // Function to toggle specific shift for 3 or 4 shift mode
+    private func toggleShift(for index: Int, shift: Int) {
+        var currentShifts = partialDayPattern[index]
+        
+        if currentShifts.contains(shift) {
+            // Remove the shift if already present
+            currentShifts.removeAll { $0 == shift }
+        } else {
+            // Add the shift if not present
+            currentShifts.append(shift)
+            currentShifts.sort() // Keep sorted for consistency
+        }
+        
+        // Update the pattern
+        var newPattern = partialDayPattern
+        newPattern[index] = currentShifts
+        partialDayPattern = newPattern
     }
 }
 

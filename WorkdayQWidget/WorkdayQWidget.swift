@@ -23,6 +23,9 @@ let weekPatternKey = "weekPattern" // Add key for custom week pattern storage
 let defaultWorkdaySettingKey = "defaultWorkdaySetting" // Setting for workday pattern type (0,1,2)
 let shiftPatternKey = "shiftPattern" // Key for shift work pattern storage
 let shiftStartDateKey = "shiftStartDate" // Key for shift pattern start date
+let numberOfShiftsKey = "numberOfShifts" // Key for number of shifts (2, 3, or 4)
+let enablePartialDayFeatureKey = "enablePartialDayFeature" // Key for enabling partial day features
+let partialDayPatternKey = "partialDayPattern" // Key for partial day shift patterns
 
 // Language options enum (duplicated from main app)
 enum AppLanguage: Int, CaseIterable {
@@ -857,16 +860,18 @@ struct WorkDayStruct: Identifiable {
     let date: Date
     let dayStatus: Int
     let note: String?
+    let shifts: [Int]?
     
     var isWorkDay: Bool {
-        return dayStatus == 2
+        return dayStatus == 2 || dayStatus == 3
     }
     
-    init(date: Date, dayStatus: Int = 0, note: String? = nil, id: UUID = UUID()) {
+    init(date: Date, dayStatus: Int = 0, note: String? = nil, shifts: [Int]? = nil, id: UUID = UUID()) {
         self.id = id
         self.date = date
         self.dayStatus = dayStatus
         self.note = note
+        self.shifts = shifts
     }
     
     // For backward compatibility
@@ -875,6 +880,7 @@ struct WorkDayStruct: Identifiable {
         self.date = date
         self.dayStatus = isWorkDay ? 2 : 1
         self.note = note
+        self.shifts = nil
     }
 }
 
@@ -1027,6 +1033,13 @@ class WidgetPatternManager {
     var workdayMode: Int = 0 // 0=default, 1=custom, 2=shift
     var shiftPattern: [Bool] = [true, true, true, true, false, false, false] // Default 4-on, 3-off
     var shiftStartDate: Date = Calendar.current.startOfDay(for: Date()) // Default to today
+    var numberOfShifts: Int = 2 // Default to 2 shifts
+    
+    // Add the partial day feature toggle
+    var enablePartialDayFeature: Bool = false // Default to disabled
+    
+    // Add the partial day pattern property
+    var partialDayPattern: [[Int]] = [[2, 4], [3], []]
     
     // Load the data from UserDefaults on initialization
     init() {
@@ -1062,6 +1075,31 @@ class WidgetPatternManager {
                 // Default to today if none exists
                 shiftStartDate = Calendar.current.startOfDay(for: Date())
             }
+            
+            // Load number of shifts
+            numberOfShifts = defaults.integer(forKey: numberOfShiftsKey)
+            if numberOfShifts < 2 || numberOfShifts > 4 {
+                numberOfShifts = 2 // Ensure valid range
+            }
+            
+            // Load partial day feature setting
+            enablePartialDayFeature = defaults.bool(forKey: enablePartialDayFeatureKey)
+            
+            // Load partial day pattern
+            if let patternData = defaults.data(forKey: partialDayPatternKey),
+               let decodedPattern = try? JSONDecoder().decode([[Int]].self, from: patternData) {
+                partialDayPattern = decodedPattern
+            }
+        }
+    }
+    
+    // Add a helper method to WidgetPatternManager to convert between patterns if needed
+    func getValidShiftsForNumberOfShifts() -> [Int] {
+        switch numberOfShifts {
+        case 2: return [2, 4]          // morning and night
+        case 3: return [2, 3, 4]       // morning, noon, night
+        case 4: return [1, 2, 3, 4]    // early morning, morning, noon, night
+        default: return [2, 4]         // default to 2-shift
         }
     }
 }

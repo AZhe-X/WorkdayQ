@@ -27,6 +27,10 @@ struct CustomCalendarView: View {
     var patternManager: WorkdayPatternManager = WorkdayPatternManager.shared
     var isEraserModeActive: Bool = false
     
+    // Function parameters
+    var isWorkDayFunction: ((Date) -> Bool)?
+    var getPartialDayShiftsFunction: ((Date) -> [Int])?
+    
     // Callbacks for toggling (tap) and editing notes (long press)
     var onToggleWorkStatus: ((Date) -> Void)?
     var onOpenNoteEditor: ((Date) -> Void)?
@@ -194,7 +198,7 @@ struct CustomCalendarView: View {
         
         // If user explicitly set a day, we show it more opaque if toggled
         let isUserSet = isExplicitlySetByUser(date)
-        let baseOpacity = showStatusOpacityDifference ? (isUserSet ? 0.8 : 0.5) : 0.8
+        let opacity = showStatusOpacityDifference ? (isUserSet ? 0.8 : 0.5) : 0.8
         
         // We'll color work days red, off days green
         let red = Color.red
@@ -202,25 +206,38 @@ struct CustomCalendarView: View {
         
         // Check if the day is in the currently displayed month
         let isInCurrentMonth = date.monthInt == currentMonth.monthInt
+
+        let workDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) })
         
         ZStack {
-            // Background circle depends on whether it's work/off day
+
+            // Background circle
             if isWorkDay {
-                if isToday {
-                    TodayCircleView(color: red, opacity: baseOpacity)
-                } else {
-                    Circle()
-                        .fill(red.opacity(baseOpacity))
+                if isToday {TodayCircleView(color: red).zIndex(100)}
+                    // Regular workday
+                    if patternManager.enablePartialDayFeature {
+                        let shifts = getPartialDayShiftsFunction?(date) ?? getDefaultPartialDayShifts(date)
+                        ShiftCircle(
+                            shifts: shifts,
+                            numberOfShifts: patternManager.numberOfShifts,
+                            size: 36,
+                            baseOpacity: opacity
+                        )
+                    } else {
+                        Circle()
+                        .fill(red.opacity(opacity))
                         .frame(width: 36, height: 36)
-                }
+                    }
+
+                    
+
             } else {
-                if isToday {
-                    TodayCircleView(color: green, opacity: baseOpacity)
-                } else {
+                if isToday {TodayCircleView(color: green).zIndex(100)}
+                    // Regular off day
                     Circle()
-                        .fill(green.opacity(baseOpacity))
+                        .fill(green.opacity(opacity))
                         .frame(width: 36, height: 36)
-                }
+
             }
             
             // Day number + note indicators
@@ -269,21 +286,22 @@ struct CustomCalendarView: View {
     // MARK: - Helper View for Today
     private struct TodayCircleView: View {
         let color: Color
-        let opacity: Double
         
         var body: some View {
             ZStack {
-                Circle()
-                    .fill(color.opacity(opacity))
-                    .frame(width: 36, height: 36)
+                // Circle()
+                //     .fill(color.opacity(opacity))
+                //     .frame(width: 36, height: 36)
                 
                 Circle()
                     .stroke(Color(UIColor.systemBackground), lineWidth: 4.5)
                     .frame(width: 36, height: 36)
+                    .zIndex(99)
                 
                 Circle()
                     .stroke(color.opacity(0.8), lineWidth: 1.5)
                     .frame(width: 36, height: 36)
+                    .zIndex(100)
             }
         }
     }
@@ -391,21 +409,13 @@ struct CustomCalendarView: View {
     }
     
     private func isWorkDay(_ date: Date) -> Bool {
-        // First check if user explicitly set this day
-        if let existingDay = workDays.first(where: { Calendar.current.isDate($0.date, inSameDayAs: date) }) {
-            // Only use explicit status if user set it (dayStatus > 0)
-            if existingDay.dayStatus > 0 {
-                return existingDay.dayStatus == 2
-            }
-            // Otherwise fall through to use default status
+        // Use the passed function if available
+        if let isWorkDayFunction = isWorkDayFunction {
+            return isWorkDayFunction(date)
         }
         
-        // Check holiday data via holiday manager
-        if let holidayInfo = HolidayManager.shared.getHolidayInfo(for: date) {
-            return holidayInfo.isWorkDay
-        }
-        
-        // Fall back to default pattern
+        // Minimal fallback that just uses the default pattern
+        // This should never be needed in normal operation
         return isDefaultWorkDay(date)
     }
     
@@ -713,7 +723,9 @@ struct CustomCalendarView_Previews: PreviewProvider {
             startOfWeekPreference: 1,
             showStatusOpacityDifference: true,
             patternManager: WorkdayPatternManager.shared,
-            isEraserModeActive: false
+            isEraserModeActive: false,
+            isWorkDayFunction: nil,
+            getPartialDayShiftsFunction: nil
         )
         .padding()
         .background(Color(UIColor.systemBackground))
