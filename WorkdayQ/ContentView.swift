@@ -904,7 +904,24 @@ struct ContentView: View {
                         numberOfShifts: patternManager.numberOfShifts,
                         size: 50,
                         baseOpacity: 0.8,
-                        dividerColor: AppAppearance(rawValue: appearancePreference)?.colorScheme == .dark ? Color(red: 0.11, green: 0.11, blue: 0.12).opacity(0.5) : Color.white.opacity(0.5)
+                        dividerColor: {
+                            let appearance = AppAppearance(rawValue: appearancePreference)
+                            
+                            // If explicitly set to light mode
+                            if appearance?.colorScheme == .light {
+                                return Color.white.opacity(0.5)
+                            }
+                            // If explicitly set to dark mode
+                            else if appearance?.colorScheme == .dark {
+                                return Color(red: 0.11, green: 0.11, blue: 0.12).opacity(0.5)
+                            }
+                            // If following system (appearance?.colorScheme is nil)
+                            else {
+                                return systemColorScheme == .light ? 
+                                    Color.white.opacity(0.5) : 
+                                    Color(red: 0.11, green: 0.11, blue: 0.12).opacity(0.5)
+                            }
+                        }()
                     )
                 } else {
                     Circle()
@@ -1285,6 +1302,10 @@ struct ContentView: View {
                                 patternManager.updateShiftPattern([true, true, true, true, false, false, false])
                                 // Reset shift start date to today
                                 patternManager.updateShiftStartDate(Calendar.current.startOfDay(for: Date()))
+                            }
+                            // If leaving shift mode, turn off partial day feature
+                            if newMode != 2 && patternManager.workdayMode == 2 {
+                                patternManager.updatePartialDayFeature(enabled: false)
                             }
                             patternManager.updateMode(newMode)
                         }
