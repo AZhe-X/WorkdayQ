@@ -136,19 +136,28 @@ func getDefaultPartialDayShifts(_ date: Date) -> [Int] {
     
     // Calculate days between start date and target date
     let calendar = Calendar.current
-    let days = calendar.dateComponents([.day], from: startDate, to: date).day ?? 0
+    let startDay = calendar.startOfDay(for: startDate)
+    let targetDay = calendar.startOfDay(for: date)
+    
+    // Get days between the dates
+    let components = calendar.dateComponents([.day], from: startDay, to: targetDay)
+    guard let days = components.day else {
+        return [] // Fallback if calculation fails
+    }
     
     // If days is negative, the date is before the start date
     if days < 0 {
-        // Return empty array for dates before the pattern start
-        return []
+        // For negative days, we need to carefully calculate the modulo
+        // to ensure we wrap around correctly in the pattern
+        let patternLength = partialDayPattern.count
+        let adjustedIndex = (patternLength - (abs(days) % patternLength)) % patternLength
+        return partialDayPattern[adjustedIndex]
+    } else {
+        // Calculate which day in the pattern this date represents
+        let patternIndex = days % partialDayPattern.count
+        // Return the shifts for this day from the pattern
+        return partialDayPattern[patternIndex]
     }
-    
-    // Calculate which day in the pattern this date represents
-    let patternIndex = days % partialDayPattern.count
-    
-    // Return the shifts for this day from the pattern
-    return partialDayPattern[patternIndex]
 }
 
 // Updated helper function to determine if a date has a specific shift
@@ -626,7 +635,7 @@ struct ContentView: View {
                     workDays: workDays,
                     languagePreference: languagePreference,
                     startOfWeekPreference: startOfWeekPreference,
-                    showStatusOpacityDifference: showStatusOpacityDifference,
+                    showStatusOpacityDifference: showStatusOpacityDifference || isEraserModeActive, // Force show in eraser mode
                     patternManager: patternManager,
                     isEraserModeActive: isEraserModeActive,
                     isWorkDayFunction: { date in
@@ -656,6 +665,14 @@ struct ContentView: View {
                         }
                         
                         showingNoteEditor = true
+                    },
+                    onCycleShifts: { date in
+                    if isEraserModeActive {
+                            resetDayStatus(date)
+                        } else {
+                            updateDayShifts2Ver(date: date)
+                        }
+                        
                     }
                 )
                 
@@ -1812,6 +1829,79 @@ struct ContentView: View {
     func hasShift(forDate date: Date, shift: Int) -> Bool {
         let shifts = getPartialDayShifts(forDate: date)
         return shifts.contains(shift)
+    }
+
+    // Add this function to ContentView
+    func updateDayShifts(_ date: Date, shifts: [Int]) {
+        // Get the start of the day to ensure consistent date comparison
+        let calendar = Calendar.current
+        let startOfDay = calendar.startOfDay(for: date)
+        
+        // Look for existing WorkDay object
+        if let existingWorkDay = workDays.first(where: { calendar.isDate($0.date, inSameDayAs: startOfDay) }) {
+            // Update existing WorkDay
+            existingWorkDay.date = startOfDay
+            existingWorkDay.dayStatus = shifts.isEmpty ? 1 : 3 // 1 = not workday, 3 = partial day
+            existingWorkDay.shifts = shifts.isEmpty ? nil : shifts
+            
+            // If an off day has no shifts, convert it to a regular off day
+            if shifts.isEmpty {
+                existingWorkDay.dayStatus = 1
+                existingWorkDay.shifts = nil
+            }
+        } else {
+            // Create new WorkDay
+            let newWorkDay = WorkDay(date: startOfDay)
+            newWorkDay.dayStatus = shifts.isEmpty ? 1 : 3 // 1 = not workday, 3 = partial day
+            newWorkDay.shifts = shifts.isEmpty ? nil : shifts
+            
+            // Add to model context
+            modelContext.insert(newWorkDay)
+        }
+        
+        // Save changes
+        do {
+            try modelContext.save()
+            
+            // Update the shared UserDefaults for widget refresh
+            if let sharedDefaults = UserDefaults(suiteName: appGroupID) {
+                sharedDefaults.set(Date().timeIntervalSince1970, forKey: lastUpdateKey)
+                sharedDefaults.synchronize()
+            }
+            
+            // Force widgets to refresh
+            reloadWidgets()
+        } catch {
+            print("Error updating day shifts: \(error.localizedDescription)")
+        }
+    }
+
+    // Add this function to cycle shifts for 2-shift system in calendar view
+    func updateDayShifts2Ver(date: Date) {
+        // Get current shifts for this date
+        let currentShifts = getPartialDayShifts(forDate: date)
+        
+        // Determine current state and cycle to next state (similar to cycleDayState logic)
+        let validShifts = [2, 4] // 2-shift system: morning (2) and night (4)
+        
+        var newShifts: [Int] = []
+        
+        if currentShifts.isEmpty {
+            // From rest -> full day (all shifts)
+            newShifts = validShifts
+        } else if currentShifts.count == validShifts.count {
+            // From full day -> morning only
+            newShifts = [2] // Morning shift only
+        } else if currentShifts.contains(2) && !currentShifts.contains(4) {
+            // From morning only -> night only
+            newShifts = [4] // Night shift only
+        } else {
+            // From night only (or any other state) -> rest
+            newShifts = []
+        }
+        
+        // Update the day with new shifts
+        updateDayShifts(date, shifts: newShifts)
     }
 }
 

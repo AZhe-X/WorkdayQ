@@ -34,6 +34,7 @@ struct CustomCalendarView: View {
     // Callbacks for toggling (tap) and editing notes (long press)
     var onToggleWorkStatus: ((Date) -> Void)?
     var onOpenNoteEditor: ((Date) -> Void)?
+    var onCycleShifts: ((Date) -> Void)?
     
     // Internal state for updating the displayed month
     @State private var currentMonth = Date()
@@ -262,8 +263,19 @@ struct CustomCalendarView: View {
         // Only add the work status toggle tap gesture for current month days
         .onTapGesture {
             if isInCurrentMonth {
-                selectedDate = date
-                onToggleWorkStatus?(date)
+                if patternManager.enablePartialDayFeature {
+                    if patternManager.numberOfShifts == 2 {
+                        selectedDate = date
+                        // Add a callback specifically for 2-shift cycling
+                        onCycleShifts?(date)
+                    } else {
+                        // For 3+ shifts, we'll use the ShiftRectangle for direct manipulation
+                        selectedDate = date
+                    }
+                } else {
+                    selectedDate = date
+                    onToggleWorkStatus?(date)
+                }
             } else {
                 // For days not in the current month, navigate to that month
                 navigateToAdjacentDay(date)
