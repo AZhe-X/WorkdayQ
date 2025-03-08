@@ -1289,6 +1289,9 @@ struct ContentView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
+                    Text(localizedText("The holiday information provided in this app is for general reference only. Please verify your work schedule after sync the holiday data.", chineseText: "本应用提供的节假日信息仅供参考。请在同步节假日数据后验证您的工作安排。"))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
 
                 // Add this to your settingsView after the Default Workday Pattern section
