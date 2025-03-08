@@ -558,6 +558,11 @@ struct ContentView: View {
     @State private var showingToS = false
     @State private var showingPP = false
     
+    // Add these properties to ContentView struct
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @State private var showingOnboarding = false
+    @State private var onboardingPage = 0
+    
     /// UNIFIED FUNCTION: Determine if a date is a work day using the three-tier priority system
     /// 1. First check explicit user-set entry (highest priority)
     /// 2. Then check holiday data (medium priority)
@@ -814,6 +819,11 @@ struct ContentView: View {
                 
                 // Still update app icon initially
                 updateAppIcon()
+                
+                // Check if this is the first launch and show onboarding if needed
+                if !hasCompletedOnboarding {
+                    showingOnboarding = true
+                }
             }
             .onChange(of: languagePreference) { oldValue, newValue in
                 // When language changes, sync it immediately and reload widgets
@@ -860,6 +870,9 @@ struct ContentView: View {
             }
             // Apply the preferred color scheme
             .preferredColorScheme(AppAppearance(rawValue: appearancePreference)?.colorScheme)
+        }
+        .fullScreenCover(isPresented: $showingOnboarding) {
+            onboardingView
         }
     }
     
@@ -1239,215 +1252,10 @@ struct ContentView: View {
             List {
 
                 // holidays Sync Settings
-                Section(header: Text(localizedText("Holidays", chineseText: "节假日和调休"))) {
-                    Picker(localizedText("Setting Holiday", chineseText: "设置节假日和调休"), selection: $holidayPreference) {
-                        ForEach(HolidayPreference.allCases) { preference in
-                            Text(localizedText(preference.localizedName.english, chineseText: preference.localizedName.chinese)).tag(preference.rawValue)
-                        }
-                    }
-                    .onChange(of: holidayPreference) { oldValue, newValue in
-                        if oldValue != newValue {
-                            // Update the holiday preference in HolidayManager
-                            HolidayManager.shared.setHolidayPreference(HolidayPreference(rawValue: newValue) ?? .none)
-                            
-                            // Force widgets to reload
-                            reloadWidgets()
-                        }
-                    }
-                    
-                    Button(action: {
-                        // Show loading indicator
-                        isRefreshingHolidays = true
-                        lastRefreshStatus = nil
-                        
-                        // Refresh holidays
-                        HolidayManager.shared.fetchHolidays { success in
-                            isRefreshingHolidays = false
-                            lastRefreshStatus = success
-                            
-                            // Force widgets to reload with new holiday data
-                            reloadWidgets()
-                        }
-                    }) {
-                        HStack {
-                            Text(localizedText("Refresh Holiday Data", chineseText: "刷新节假日数据"))
-                            
-                            Spacer()
-                            
-                            if isRefreshingHolidays {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle())
-                            } else if let status = lastRefreshStatus {
-                                Image(systemName: status ? "checkmark.circle" : "xmark.circle")
-                                    .foregroundColor(status ? .green : .red)
-                            }
-                        }
-                    }
-                    .disabled(holidayPreference == HolidayPreference.none.rawValue || isRefreshingHolidays)
-                    
-                    if let lastFetchTime = UserDefaults.standard.object(forKey: lastHolidayFetchKey) as? TimeInterval {
-                        HStack {
-                            Text(localizedText("Last Updated", chineseText: "上次更新"))
-                            Spacer()
-                            Text(Date(timeIntervalSince1970: lastFetchTime).formatted(date: .abbreviated, time: .shortened))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    Text(localizedText("The holiday information provided in this app is for general reference only. Please verify your work schedule after sync the holiday data.", chineseText: "本应用提供的节假日信息仅供参考。请在同步节假日数据后验证您的工作安排。"))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+                holidaySyncSettingsSection()
 
-                // Add this to your settingsView after the Default Workday Pattern section
-                Section(header: Text(localizedText("Default Workday Pattern", chineseText: "默认工作日模式"))) {
-                    Picker(localizedText("Workday Pattern Mode", chineseText: "工作日模式"), selection: Binding(
-                        get: { patternManager.workdayMode },
-                        set: { newMode in
-                            // If switching to shift mode, reset to defaults
-                            if newMode == 2 && patternManager.workdayMode != 2 {
-                                // Reset shift pattern to default 4-on, 3-off
-                                patternManager.updateShiftPattern([true, true, true, true, false, false, false])
-                                // Reset shift start date to today
-                                patternManager.updateShiftStartDate(Calendar.current.startOfDay(for: Date()))
-                            }
-                            // If leaving shift mode, turn off partial day feature
-                            if newMode != 2 && patternManager.workdayMode == 2 {
-                                patternManager.updatePartialDayFeature(enabled: false)
-                            }
-                            patternManager.updateMode(newMode)
-                        }
-                    )) {
-                        Text(localizedText("Default", chineseText: "默认")).tag(0)
-                        Text(localizedText("User Defined Week", chineseText: "自定义周")).tag(1)
-                        Text(localizedText("Shift Work", chineseText: "轮班")).tag(2)
-                    }
-                    .pickerStyle(.segmented)
-                    
-                    // Show week pattern editor only if User Defined Week is selected
-                    if patternManager.workdayMode == 1 {
-                        VStack(alignment: .leading, spacing: 8) {
-                            WeekPatternEditorView(
-                                weekPattern: Binding(
-                                    get: { patternManager.pattern },
-                                    set: { patternManager.updatePattern($0) }
-                                ),
-                                startOfWeek: startOfWeekPreference,
-                                languagePreference: languagePreference
-                            )
-                        }
-                        .padding(.top, 8)
-                    }
-                    
-                    // Show shift pattern editor only if Shift Work is selected
-                    if patternManager.workdayMode == 2 {
-                        // No state variables here, just use the ones from the struct
-
-                            // First row: Shift start date button and pattern length picker
-                            DatePicker(
-                                    localizedText("Shift start date", chineseText: "轮班开始日期"),
-                                    selection: Binding(
-                                        get: { patternManager.shiftStartDate },
-                                        set: { newDate in
-                                            patternManager.updateShiftStartDate(newDate)
-                                            // Auto-close the picker after selection
-                                            showingShiftDatePicker = false
-                                        }
-                                    ),
-                                    displayedComponents: .date
-                                )
-                                .datePickerStyle(.compact)
-
-                            HStack(spacing: 4) {
-                                    // Use Picker instead of nested HStack + Menu
-                                    Picker(localizedText("Length:", chineseText: "周期:"), selection: Binding(
-                                        get: { patternManager.shiftPattern.count },
-                                        set: { newLength in
-                                            var newShiftPattern = patternManager.shiftPattern
-                                            var newPartialDayPattern = patternManager.partialDayPattern
-                                            
-                                            // Update shift pattern length
-                                            if newLength > newShiftPattern.count {
-                                                // Add new days as rest days (false)
-                                                newShiftPattern.append(contentsOf: Array(repeating: false, count: newLength - newShiftPattern.count))
-                                            } else if newLength < newShiftPattern.count {
-                                                // Remove days from the end
-                                                newShiftPattern = Array(newShiftPattern.prefix(newLength))
-                                            }
-                                            
-                                            // Update partial day pattern length to match
-                                            if newLength > newPartialDayPattern.count {
-                                                // Add new days as rest days (empty arrays)
-                                                newPartialDayPattern.append(contentsOf: Array(repeating: [], count: newLength - newPartialDayPattern.count))
-                                            } else if newLength < newPartialDayPattern.count {
-                                                // Remove days from the end
-                                                newPartialDayPattern = Array(newPartialDayPattern.prefix(newLength))
-                                            }
-                                            
-                                            // Update both patterns
-                                            patternManager.updateShiftPattern(newShiftPattern)
-                                            patternManager.updatePartialDayPattern(newPartialDayPattern)
-                                        }
-                                    )) {
-                                        ForEach(1...9, id: \.self) { length in
-                                            Text("\(length)").tag(length)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
-                                }
-                            
-                            // Date picker (shown/hidden based on state)
-
-                            
-                            // Shift pattern editor
-                            if patternManager.enablePartialDayFeature {
-                                PartialDayPatternEditorView(
-                                    partialDayPattern: Binding(
-                                        get: { patternManager.partialDayPattern },
-                                        set: { patternManager.updatePartialDayPattern($0) }
-                                    ),
-                                    numberOfShifts: patternManager.numberOfShifts
-                                )
-                                .frame(maxWidth: .infinity, alignment: .center)
-                            } else {
-                                ShiftPatternEditorView(
-                                    shiftPattern: Binding(
-                                        get: { patternManager.shiftPattern },
-                                        set: { patternManager.updateShiftPattern($0) }
-                                    ),
-                                    languagePreference: languagePreference,
-                                    workText: localizedText("Work", chineseText: "工作"),
-                                    offText: localizedText("Off", chineseText: "休息")
-                                )
-                                .frame(maxWidth: .infinity, alignment: .center)
-                            }
-                                
-
-                            // After the ShiftPatternEditorView, add:
-                            Toggle(isOn: Binding(
-                                get: { patternManager.enablePartialDayFeature },
-                                set: { patternManager.updatePartialDayFeature(enabled: $0) }
-                            )) {
-                                Text(localizedText("Enable Partial Day Shifts", chineseText: "启用分段工作日"))
-                            }
-
-                            // Only show the shift count picker when partial day is enabled and in shift mode
-                            if patternManager.enablePartialDayFeature && patternManager.workdayMode == 2 {
-                                Picker(selection: $patternManager.numberOfShifts) {
-                                    Text("2 \(localizedText("Shifts", chineseText: "班次"))").tag(2)
-                                    Text("3 \(localizedText("Shifts", chineseText: "班次"))").tag(3)
-                                    Text("4 \(localizedText("Shifts", chineseText: "班次"))").tag(4)
-                                } label: {
-                                    Text(localizedText("Number of Shifts", chineseText: "每日班次数量"))
-                                }
-                                .pickerStyle(.segmented)
-                                .onChange(of: patternManager.numberOfShifts) { _, _ in
-                                    patternManager.saveToUserDefaults()
-                                }
-                            }
-                    }
-                }
-
-
+                // Workday Mode Settings
+                workdayModeSettingsSection()
 
                 // Customization Settings
                 Section(header: Text(localizedText("Customization", chineseText: "自定义"))) {
@@ -2034,6 +1842,420 @@ struct ContentView: View {
         }
         
         return "Error: Content not found. ."
+    }
+
+    // Add these functions inside ContentView struct before the body property
+
+    // Extracts the Holidays section into a reusable function
+    private func holidaySyncSettingsSection() -> some View {
+        Section(header: Text(localizedText("Holidays", chineseText: "节假日和调休"))) {
+            Picker(localizedText("Setting Holiday", chineseText: "设置节假日和调休"), selection: $holidayPreference) {
+                ForEach(HolidayPreference.allCases) { preference in
+                    Text(localizedText(preference.localizedName.english, chineseText: preference.localizedName.chinese)).tag(preference.rawValue)
+                }
+            }
+            .onChange(of: holidayPreference) { oldValue, newValue in
+                if oldValue != newValue { 
+                    // Update the holiday preference in HolidayManager
+                    HolidayManager.shared.setHolidayPreference(HolidayPreference(rawValue: newValue) ?? .none)
+                    
+                    // Force widgets to reload
+                    reloadWidgets()
+                }
+            }
+            
+            Button(action: {
+                // Show loading indicator
+                isRefreshingHolidays = true
+                lastRefreshStatus = nil
+                
+                // Refresh holidays
+                HolidayManager.shared.fetchHolidays { success in
+                    isRefreshingHolidays = false
+                    lastRefreshStatus = success
+                    
+                    // Force widgets to reload with new holiday data
+                    reloadWidgets()
+                }
+            }) {
+                HStack {
+                    Text(localizedText("Refresh Holiday Data", chineseText: "刷新节假日数据"))
+                    
+                    Spacer()
+                    
+                    if isRefreshingHolidays {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                    } else if let status = lastRefreshStatus {
+                        Image(systemName: status ? "checkmark.circle" : "xmark.circle")
+                            .foregroundColor(status ? .green : .red)
+                    }
+                }
+            }
+            .disabled(holidayPreference == HolidayPreference.none.rawValue || isRefreshingHolidays)
+            
+            if let lastFetchTime = UserDefaults.standard.object(forKey: lastHolidayFetchKey) as? TimeInterval {
+                HStack {
+                    Text(localizedText("Last Updated", chineseText: "上次更新"))
+                    Spacer()
+                    Text(Date(timeIntervalSince1970: lastFetchTime).formatted(date: .abbreviated, time: .shortened))
+                        .foregroundColor(.secondary)
+                }
+            }
+            Text(localizedText("The holiday information provided in this app is for general reference only. Please verify your work schedule after sync the holiday data.", chineseText: "本应用提供的节假日信息仅供参考。请在同步节假日数据后验证您的工作安排。"))
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    // Extracts the Workday Mode Settings section into a reusable function
+    private func workdayModeSettingsSection() -> some View {
+        Section(header: Text(localizedText("Default Workday Pattern", chineseText: "默认工作日模式"))) {
+            Picker(localizedText("Workday Pattern Mode", chineseText: "工作日模式"), selection: Binding(
+                get: { patternManager.workdayMode },
+                set: { newMode in
+                    // If switching to shift mode, reset to defaults
+                    if newMode == 2 && patternManager.workdayMode != 2 {
+                        // Reset shift pattern to default 4-on, 3-off
+                        patternManager.updateShiftPattern([true, true, true, true, false, false, false])
+                        // Reset shift start date to today
+                        patternManager.updateShiftStartDate(Calendar.current.startOfDay(for: Date()))
+                    }
+                    // If leaving shift mode, turn off partial day feature
+                    if newMode != 2 && patternManager.workdayMode == 2 {
+                        patternManager.updatePartialDayFeature(enabled: false)
+                    }
+                    patternManager.updateMode(newMode)
+                }
+            )) {
+                Text(localizedText("Default", chineseText: "默认")).tag(0)
+                Text(localizedText("User Defined Week", chineseText: "自定义周")).tag(1)
+                Text(localizedText("Shift Work", chineseText: "轮班")).tag(2)
+            }
+            .pickerStyle(.segmented)
+
+            if patternManager.workdayMode == 0 {
+                Text(localizedText("Monday to Friday is a workday, and Saturday and Sunday are rest days.", chineseText: "周一至周五为工作日，周末为休息日。"))
+                .font(.caption)
+                .foregroundColor(.secondary)
+            }
+            
+            // Show week pattern editor only if User Defined Week is selected
+            if patternManager.workdayMode == 1 {
+                VStack(alignment: .leading, spacing: 8) {
+                    WeekPatternEditorView(
+                        weekPattern: Binding(
+                            get: { patternManager.pattern },
+                            set: { patternManager.updatePattern($0) }
+                        ),
+                        startOfWeek: startOfWeekPreference,
+                        languagePreference: languagePreference
+                    )
+                }
+                .padding(.top, 8)
+            }
+            
+            // Show shift pattern editor only if Shift Work is selected
+            if patternManager.workdayMode == 2 {
+                // First row: Shift start date button and pattern length picker
+                DatePicker(
+                    localizedText("Shift start date", chineseText: "轮班开始日期"),
+                    selection: Binding(
+                        get: { patternManager.shiftStartDate },
+                        set: { newDate in
+                            patternManager.updateShiftStartDate(newDate)
+                            // Auto-close the picker after selection
+                            showingShiftDatePicker = false
+                        }
+                    ),
+                    displayedComponents: .date
+                )
+                .datePickerStyle(.compact)
+                
+                HStack(spacing: 4) {
+                    // Use Picker instead of nested HStack + Menu
+                    Picker(localizedText("Length:", chineseText: "周期:"), selection: Binding(
+                        get: { patternManager.shiftPattern.count },
+                        set: { newLength in
+                            var newShiftPattern = patternManager.shiftPattern
+                            var newPartialDayPattern = patternManager.partialDayPattern
+                            
+                            // Update shift pattern length
+                            if newLength > newShiftPattern.count {
+                                // Add new days as rest days (false)
+                                newShiftPattern.append(contentsOf: Array(repeating: false, count: newLength - newShiftPattern.count))
+                            } else if newLength < newShiftPattern.count {
+                                // Remove days from the end
+                                newShiftPattern = Array(newShiftPattern.prefix(newLength))
+                            }
+                            
+                            // Update partial day pattern length to match
+                            if newLength > newPartialDayPattern.count {
+                                // Add new days as rest days (empty arrays)
+                                newPartialDayPattern.append(contentsOf: Array(repeating: [], count: newLength - newPartialDayPattern.count))
+                            } else if newLength < newPartialDayPattern.count {
+                                // Remove days from the end
+                                newPartialDayPattern = Array(newPartialDayPattern.prefix(newLength))
+                            }
+                            
+                            // Update both patterns
+                            patternManager.updateShiftPattern(newShiftPattern)
+                            patternManager.updatePartialDayPattern(newPartialDayPattern)
+                        }
+                    )) {
+                        ForEach(1...9, id: \.self) { length in
+                            Text("\(length)").tag(length)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                }
+                
+                // Shift pattern editor
+                if patternManager.enablePartialDayFeature {
+                    PartialDayPatternEditorView(
+                        partialDayPattern: Binding(
+                            get: { patternManager.partialDayPattern },
+                            set: { patternManager.updatePartialDayPattern($0) }
+                        ),
+                        numberOfShifts: patternManager.numberOfShifts
+                    )
+                    .frame(maxWidth: .infinity, alignment: .center)
+                } else {
+                    ShiftPatternEditorView(
+                        shiftPattern: Binding(
+                            get: { patternManager.shiftPattern },
+                            set: { patternManager.updateShiftPattern($0) }
+                        ),
+                        languagePreference: languagePreference,
+                        workText: localizedText("Work", chineseText: "工作"),
+                        offText: localizedText("Off", chineseText: "休息")
+                    )
+                    .frame(maxWidth: .infinity, alignment: .center)
+                }
+                
+                // After the ShiftPatternEditorView, add:
+                Toggle(isOn: Binding(
+                    get: { patternManager.enablePartialDayFeature },
+                    set: { patternManager.updatePartialDayFeature(enabled: $0) }
+                )) {
+                    Text(localizedText("Enable Partial Day Shifts", chineseText: "一日多班"))
+                }
+                
+                // Only show the shift count picker when partial day is enabled and in shift mode
+                if patternManager.enablePartialDayFeature && patternManager.workdayMode == 2 {
+                    Picker(selection: Binding(
+                        get: { patternManager.numberOfShifts },
+                        set: { 
+                            patternManager.numberOfShifts = $0
+                            patternManager.saveToUserDefaults()
+                        }
+                    )) {
+                        Text("2 \(localizedText("Shifts", chineseText: "班次"))").tag(2)
+                        Text("3 \(localizedText("Shifts", chineseText: "班次"))").tag(3)
+                        Text("4 \(localizedText("Shifts", chineseText: "班次"))").tag(4)
+                    } label: {
+                        Text(localizedText("Number of Shifts", chineseText: "每日班次数量"))
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
+        }
+    }
+
+    // Add this computed property to ContentView struct
+    var onboardingView: some View {
+        ZStack {
+            // Background color
+            Color(UIColor.systemBackground)
+                .edgesIgnoringSafeArea(.all)
+            
+            VStack(spacing: 10) {
+                // Header with app name and welcome message
+                VStack(spacing: 10) {                    
+                    Text(localizedText("Welcome to WorkdayQ!", chineseText: "欢迎使用今天上班吗?"))
+                        .font(.title)
+                        .fontWeight(.medium)
+
+                }
+                .padding(.top, 20)
+                
+                // Page indicator
+                HStack(spacing: 8) {
+                    ForEach(0..<3) { page in
+                        Circle()
+                            .fill(page == onboardingPage ? Color.blue : Color.gray.opacity(0.3))
+                            .frame(width: 8, height: 8)
+                    }
+                }
+                .padding(.top, 10)
+                
+                // Content based on current page
+ 
+                    VStack(alignment: .leading, spacing: 20) {
+                        switch onboardingPage {
+                        case 0:
+                            // Welcome page
+                            VStack(alignment: .leading, spacing: 15) {
+                                Text(localizedText("WorkdayQ helps you:", chineseText: "“今天上班吗？”是个小工具，帮你快速搞清楚今天要不要上班！"))
+                                    .font(.headline)
+
+                                FeatureRow(
+                                    iconName: "widget.small.badge.plus",
+                                    title: localizedText("Use a widget and see at a glance—work today or not?", chineseText: "小组件一放，一眼就知今天上班吗？")
+                                )
+                                
+                                FeatureRow(
+                                    iconName: "calendar",
+                                    title: localizedText("Keep track of your workdays and rest days", chineseText: "随时知道哪天上班，哪天休息！")
+                                )
+                            
+                                
+                                FeatureRow(
+                                    iconName: "fireworks",
+                                    title: localizedText("Sync holiday information", chineseText: "同步假期调休信息，更方便！")
+                                )
+                                
+                                FeatureRow(
+                                    iconName: "note.text",
+                                    title: localizedText("Add notes to days", chineseText: "给日子加备注，更好记！")
+                                )
+
+                                FeatureRow(
+                                    iconName: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                                    title: localizedText("Manage shift schedules", chineseText: "轻松管理自己的排班表！")
+                                )
+                            }
+                            .padding(.horizontal)
+                            
+                        case 1:
+                            // Holiday settings
+                            VStack(alignment: .leading, spacing: 15) {
+                                Text(localizedText("Holiday Settings", chineseText: "节假日设置"))
+                                    .font(.headline)
+                                    .padding(.horizontal)
+                                
+                                Text(localizedText("You can change this later in settings.", chineseText: "稍后可以在设置中更改。"))
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal)
+                                
+                                // Use the holiday settings section here
+                                Form {
+                                    holidaySyncSettingsSection()
+                                }
+                                .scrollContentBackground(.hidden) // Make the Form background transparent
+                                .frame(height: 300) // Adjust the height as needed
+                            }
+                            
+                        case 2:
+                            // Workday pattern settings
+                            VStack(alignment: .leading, spacing: 15) {
+                                Text(localizedText("Workday Pattern", chineseText: "工作日模式"))
+                                    .font(.headline)
+                                    .padding(.horizontal)
+                                
+                                Text(localizedText("You can change this later in settings.", chineseText: "稍后可以在设置中更改。"))
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                    .padding(.horizontal)
+                                
+                                // Use the workday settings section here
+                                Form {
+                                    workdayModeSettingsSection()
+                                }
+                                .scrollContentBackground(.hidden) // Make the Form background transparent
+                                .frame(height: 420) // Adjust the height as needed
+                            }
+                        
+                        default:
+                            EmptyView()
+                        }
+                    }
+                    .padding(.vertical, 20)
+                    .frame(maxWidth: .infinity)
+
+                    Spacer()
+                
+                // Navigation buttons
+                HStack {
+                    if onboardingPage > 0 {
+                        Button(action: {
+                            withAnimation {
+                                onboardingPage -= 1
+                            }
+                        }) {
+                            HStack {
+                                Image(systemName: "chevron.left")
+                                Text(localizedText("Back", chineseText: "返回"))
+                            }
+                            .padding()
+                            .foregroundColor(.blue)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    if onboardingPage < 2 {
+                        Button(action: {
+                            withAnimation {
+                                onboardingPage += 1
+                            }
+                        }) {
+                            HStack {
+                                Text(localizedText("Next", chineseText: "下一步"))
+                                Image(systemName: "chevron.right")
+                            }
+                            .padding()
+                            .foregroundColor(.white)
+                            .background(Color.blue)
+                            .clipShape(Capsule())
+                        }
+                    } else {
+                        Button(action: {
+                            // Mark onboarding as completed
+                            hasCompletedOnboarding = true
+                            showingOnboarding = false
+                            
+                            // Reload widgets to reflect the settings
+                            reloadWidgets()
+                        }) {
+                            Text(localizedText("Get Started", chineseText: "开始使用"))
+                                .padding()
+                                .foregroundColor(.white)
+                                .frame(minWidth: 120)
+                                .background(Color.blue)
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 40)
+            }
+            .padding()
+        }
+        // The following will ensure the onboarding respects the user's appearance preference
+        .preferredColorScheme(AppAppearance(rawValue: appearancePreference)?.colorScheme)
+    }
+
+    // Add this helper view for feature rows
+    struct FeatureRow: View {
+        let iconName: String
+        let title: String
+        
+        var body: some View {
+            HStack(spacing: 15) {
+                Image(systemName: iconName)
+                    .font(.system(size: 22))
+                    .foregroundColor(.blue)
+                    .frame(width: 30, height: 30)
+                
+                Text(title)
+                    .font(.body)
+                
+                Spacer()
+            }
+            .padding(.vertical, 5)
+        }
     }
 }
 
