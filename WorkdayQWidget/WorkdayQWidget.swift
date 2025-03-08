@@ -842,10 +842,20 @@ struct SmallWeekWidgetView: View {
             //     .foregroundColor(isToday ? .primary : .secondary)
             
             ZStack {
-                Circle()
+                if WidgetPatternManager.shared.enablePartialDayFeature {
+                    ShiftCircle(
+                        shifts: entry.getPartialDayShifts(forDate: date),
+                        numberOfShifts: WidgetPatternManager.shared.numberOfShifts,
+                        size: circleSize,
+                        baseOpacity: 0.8,
+                        dividerColor: colorScheme == .dark ? 
+                            Color(UIColor.systemGray6) : Color.white.opacity(0.5)
+                    )
+                } else {
+                    Circle()
                     .fill(isWorkDay ? Color.red.opacity(0.8) : Color.green.opacity(0.8))
                     .frame(width: circleSize, height: circleSize)
-                
+                }
                 Text("\(dayNum)")
                     .font(.system(size: fontSize, weight: .light))
                     .foregroundColor(.white)
