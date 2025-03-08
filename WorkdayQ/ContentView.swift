@@ -554,6 +554,10 @@ struct ContentView: View {
     // Add this state variable to ContentView struct with other @State properties
     @State private var isEraserModeActive = false
     
+    // Add these state variables to ContentView struct alongside other @State properties
+    @State private var showingToS = false
+    @State private var showingPP = false
+    
     /// UNIFIED FUNCTION: Determine if a date is a work day using the three-tier priority system
     /// 1. First check explicit user-set entry (highest priority)
     /// 2. Then check holiday data (medium priority)
@@ -1661,7 +1665,32 @@ struct ContentView: View {
                         Text(appVersion)
                             .foregroundColor(.secondary)
                     }
-
+                    
+                    // Add Terms of Service button
+                    Button(action: {
+                        showingToS = true
+                    }) {
+                        HStack {
+                            Text(localizedText("Terms of Service", chineseText: "服务条款"))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    
+                    // Add Privacy Policy button
+                    Button(action: {
+                        showingPP = true
+                    }) {
+                        HStack {
+                            Text(localizedText("Privacy Policy", chineseText: "隐私政策"))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 
                 
@@ -1675,6 +1704,24 @@ struct ContentView: View {
                     }
                 }
             }
+        }
+        // Add these sheet modifiers to the end of the settings NavigationStack view
+        // Just before the closing bracket of settingsView (before the ending of NavigationStack)
+        .sheet(isPresented: $showingToS) {
+            LegalView(
+                isPresented: $showingToS,
+                title: localizedText("Terms of Service", chineseText: "服务条款"),
+                content: getToSContent()
+            )
+            .preferredColorScheme(AppAppearance(rawValue: appearancePreference)?.colorScheme ?? systemColorScheme)
+        }
+        .sheet(isPresented: $showingPP) {
+            LegalView(
+                isPresented: $showingPP,
+                title: localizedText("Privacy Policy", chineseText: "隐私政策"),
+                content: getPPContent()
+            )
+            .preferredColorScheme(AppAppearance(rawValue: appearancePreference)?.colorScheme ?? systemColorScheme)
         }
     }
     
@@ -1950,6 +1997,44 @@ struct ContentView: View {
         // Update the day with new shifts
         updateDayShifts(date, shifts: newShifts)
     }
+
+    // Add these helper functions to ContentView struct
+    func getToSContent() -> String {
+        let fileName = languagePreference == 2 ? "ToS_zh" : "ToS_en"
+        return readMarkdownFile(named: fileName)
+    }
+
+    func getPPContent() -> String {
+        let fileName = languagePreference == 2 ? "PP_zh" : "PP_en"
+        return readMarkdownFile(named: fileName)
+    }
+
+    func readMarkdownFile(named fileName: String) -> String {
+        // Try first with the legal directory
+        if let path = Bundle.main.path(forResource: fileName, ofType: "md", inDirectory: "legal"),
+           let content = try? String(contentsOfFile: path, encoding: .utf8) {
+            return content
+        }
+        
+        // If not found, try without specifying a directory
+        if let path = Bundle.main.path(forResource: fileName, ofType: "md"),
+           let content = try? String(contentsOfFile: path, encoding: .utf8) {
+            return content
+        }
+        
+        // Log more detailed error information to help debugging
+        print("Failed to load \(fileName).md - Bundle paths:")
+        if let resourceURL = Bundle.main.resourceURL {
+            do {
+                let contents = try FileManager.default.contentsOfDirectory(at: resourceURL, includingPropertiesForKeys: nil)
+                print("Bundle contents: \(contents)")
+            } catch {
+                print("Unable to list bundle contents: \(error)")
+            }
+        }
+        
+        return "Error: Content not found. ."
+    }
 }
 
 // Modified WeekPatternEditorView with improved spacing
@@ -2172,6 +2257,78 @@ struct PartialDayPatternEditorView: View {
         var newPattern = partialDayPattern
         newPattern[index] = currentShifts
         partialDayPattern = newPattern
+    }
+}
+
+// Add this struct after the ContentView struct, just before the #Preview section
+struct LegalView: View {
+    @Binding var isPresented: Bool
+    let title: String
+    let content: String
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(parseMarkdown(content), id: \.self) { line in
+                        createFormattedText(for: line)
+                    }
+                }
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(localizedText("Close", chineseText: "关闭"), action: { isPresented = false })
+                }
+            }
+        }
+    }
+    
+    func parseMarkdown(_ markdown: String) -> [String] {
+        return markdown.components(separatedBy: .newlines).filter { !$0.isEmpty }
+    }
+    
+    @ViewBuilder
+    func createFormattedText(for line: String) -> some View {
+        if line.hasPrefix("# ") {
+            // Main heading
+            Text(line.dropFirst(2))
+                .font(.title)
+                .fontWeight(.bold)
+                .padding(.bottom, 4)
+        } else if line.hasPrefix("## ") {
+            // Section heading
+            Text(line.dropFirst(3))
+                .font(.title2)
+                .fontWeight(.semibold)
+                .padding(.top, 8)
+        } else if line.hasPrefix("### ") {
+            // Subsection heading
+            Text(line.dropFirst(4))
+                .font(.title3)
+                .fontWeight(.semibold)
+        } else if line.hasPrefix("- ") {
+            // Bullet point
+            HStack(alignment: .top) {
+                Text("•")
+                Text(line.dropFirst(2))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.leading, 8)
+        } else {
+            // Regular paragraph
+            Text(line)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    
+    // Use the same localized text helper as in ContentView
+    func localizedText(_ englishText: String, chineseText: String) -> String {
+        let preferredLanguage = Locale.current.language.languageCode?.identifier ?? "en"
+        return preferredLanguage.hasPrefix("zh") ? chineseText : englishText
     }
 }
 
