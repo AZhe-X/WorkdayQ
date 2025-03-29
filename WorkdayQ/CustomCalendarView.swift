@@ -27,6 +27,7 @@ struct CustomCalendarView: View {
     var showStatusOpacityDifference: Bool = true
     var patternManager: WorkdayPatternManager = WorkdayPatternManager.shared
     var isEraserModeActive: Bool = false
+    var isCalendarLocked: Bool = false // Add calendar lock parameter
     
     // Function parameters
     var isWorkDayFunction: ((Date) -> Bool)?
@@ -275,6 +276,11 @@ struct CustomCalendarView: View {
         .onTapGesture {
             if isInCurrentMonth {
                 if patternManager.enablePartialDayFeature {
+                    // First check if calendar is locked
+                    if isCalendarLocked {
+                        return
+                    }
+                    
                     if patternManager.numberOfShifts == 2 {
                         selectedDate = date
                         onCycleShifts?(date)

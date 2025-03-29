@@ -123,6 +123,16 @@ func isDefaultWorkdayShift(_ date: Date) -> Bool {
 
 /// Returns the default shifts for a specific date based on the partial day pattern
 func getDefaultPartialDayShifts(_ date: Date) -> [Int] {
+    // First check holiday data (medium priority)
+    if let holidayInfo = HolidayManager.shared.getHolidayInfo(for: date) {
+        // If it's a holiday and not a work day, return empty shifts
+        if !holidayInfo.isWorkDay {
+            return []
+        }
+        // If it's a holiday but still a work day (like makeup workday),
+        // continue with pattern checking
+    }
+    
     let manager = WorkdayPatternManager.shared
     let partialDayPattern = manager.partialDayPattern
     
@@ -554,6 +564,9 @@ struct ContentView: View {
     // Add this state variable to ContentView struct with other @State properties
     @State private var isEraserModeActive = false
     
+    // Add this state variable for calendar lock (on by default)
+    @State private var isCalendarLocked = true
+    
     // Add these state variables to ContentView struct alongside other @State properties
     @State private var showingToS = false
     @State private var showingPP = false
@@ -649,6 +662,7 @@ struct ContentView: View {
                     showStatusOpacityDifference: showStatusOpacityDifference || isEraserModeActive, // Force show in eraser mode
                     patternManager: patternManager,
                     isEraserModeActive: isEraserModeActive,
+                    isCalendarLocked: isCalendarLocked, // Pass the lock state
                     isWorkDayFunction: { date in
                         // Remove [weak self] - not needed for structs
                         isWorkDay(forDate: date)
@@ -657,7 +671,12 @@ struct ContentView: View {
                         getPartialDayShifts(forDate: date)
                     },
                     onToggleWorkStatus: { date in
-                        // Revert to the original implementation
+                        // Check if calendar is locked - if so, do nothing
+                        if isCalendarLocked {
+                            return
+                        }
+                        
+                        // Otherwise, proceed with normal logic
                         if isEraserModeActive {
                             resetDayStatus(date)
                         } else {
@@ -665,7 +684,7 @@ struct ContentView: View {
                         }
                     },
                     onOpenNoteEditor: { date in
-                        // Revert to the original implementation
+                        // Note editing allowed even when locked (as requested)
                         selectedDate = date
                         
                         // Get existing note if any
@@ -678,7 +697,13 @@ struct ContentView: View {
                         showingNoteEditor = true
                     },
                     onCycleShifts: { date in
-                    if isEraserModeActive {
+                        // Check if calendar is locked - if so, do nothing
+                        if isCalendarLocked {
+                            return
+                        }
+                        
+                        // Otherwise, proceed with normal logic
+                        if isEraserModeActive {
                             resetDayStatus(date)
                         } else {
                             updateDayShifts2Ver(date: date)
@@ -686,6 +711,12 @@ struct ContentView: View {
                         
                     },
                     onToggleShift: { date, shiftNumber in
+                        // Check if calendar is locked - if so, do nothing
+                        if isCalendarLocked {
+                            return
+                        }
+                        
+                        // Otherwise, proceed with normal logic
                         // Get current shifts for this date
                         var currentShifts = getPartialDayShifts(forDate: date)
                         
@@ -703,54 +734,89 @@ struct ContentView: View {
                 )
                 
                 // Instructions for interactions
-                HStack(alignment: .top) {
-                    if isEraserModeActive {
-                        // Single line text for eraser mode
-                        Label(localizedText("Tap a day to reset to default workday", 
-                                          chineseText: "点击日期以移除工作日更改"), 
-                                  systemImage: "hand.tap")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-
-                    } else {
-                        // Original VStack with separate labels for tap and long-press
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label(localizedText("Tap a day to toggle work/rest status", 
-                                               chineseText: "点击日期切换工作/休息状态"), 
-                                  systemImage: "hand.tap")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                HStack(alignment: .center) {
+                    // Add lock button to the left
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                            isCalendarLocked.toggle()
                             
-                            Label(localizedText("Long-press to add or edit notes", 
-                                               chineseText: "长按添加或编辑备注"), 
-                                  systemImage: "hand.tap.fill")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                            // If locking, also disable eraser mode
+                            if isCalendarLocked && isEraserModeActive {
+                                isEraserModeActive = false
+                            }
                         }
+                    }) {
+                        Image(systemName: isCalendarLocked ? "lock.fill" : "lock.open.fill")
+                            .foregroundColor(isCalendarLocked ? .secondary : .blue)
+                            .padding(8)
+                    }
+                    .accessibilityLabel(isCalendarLocked 
+                        ? localizedText("Unlock calendar", chineseText: "解锁日历") 
+                        : localizedText("Lock calendar", chineseText: "锁定日历"))
+                    
+                    Spacer()
+                    
+                    // Only show instructions if calendar is unlocked
+                    if !isCalendarLocked {
+                        if isEraserModeActive {
+                            // Single line text for eraser mode
+                            Label(localizedText("Tap a day to reset to default workday", 
+                                              chineseText: "点击日期以移除工作日更改"), 
+                                      systemImage: "hand.tap")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+
+                        } else {
+                            // Original VStack with separate labels for tap and long-press
+                            VStack(alignment: .center, spacing: 4) {
+                                Label(localizedText("Tap a day to toggle work/rest status", 
+                                                   chineseText: "点击日期切换工作/休息状态"), 
+                                      systemImage: "hand.tap")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Label(localizedText("Long-press to add or edit notes", 
+                                                   chineseText: "长按添加或编辑备注"), 
+                                      systemImage: "hand.tap.fill")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    } else {
+                        EmptyView()
                     }
                     
                     Spacer()
                     
-                    // Eraser button remains the same
-                    Button(action: {
-                        withAnimation {
-                            isEraserModeActive.toggle()
+                    // Only show eraser button if calendar is unlocked
+                    if !isCalendarLocked {
+                        // Eraser button remains the same
+                        Button(action: {
+                            withAnimation {
+                                isEraserModeActive.toggle()
+                            }
+                        }) {
+                            Image(systemName: "eraser\(isEraserModeActive ? ".fill" : "")")
+                                .foregroundColor(isEraserModeActive ? .blue : .secondary)
+                                .padding(8)
+                                .background(
+                                    Circle()
+                                        .fill(isEraserModeActive ? Color.blue.opacity(0.2) : Color.clear)
+                                )
                         }
-                    }) {
-                        Image(systemName: "eraser\(isEraserModeActive ? ".fill" : "")")
-                            .foregroundColor(isEraserModeActive ? .blue : .secondary)
-                            .padding(8)
-                            .background(
-                                Circle()
-                                    .fill(isEraserModeActive ? Color.blue.opacity(0.2) : Color.clear)
-                            )
+                        .accessibilityLabel(isEraserModeActive 
+                            ? localizedText("Exit eraser mode", chineseText: "退出橡皮擦模式") 
+                            : localizedText("Enter eraser mode", chineseText: "进入橡皮擦模式"))
+                    } else {
+                        Text(localizedText("Unlock to edit the calendar", 
+                                         chineseText: "解锁以编辑日历"))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
                     }
-                    .accessibilityLabel(isEraserModeActive 
-                        ? localizedText("Exit eraser mode", chineseText: "退出橡皮擦模式") 
-                        : localizedText("Enter eraser mode", chineseText: "进入橡皮擦模式"))
                 }
-                .padding(.horizontal)
-                
+                .padding(.top, -20)
+                .padding(.horizontal, 10)
                 Spacer()
             }
             .padding()
@@ -805,6 +871,9 @@ struct ContentView: View {
                 // Always update selectedDate to today when view appears
                 selectedDate = Date()
                 
+                // Ensure calendar is locked on startup
+                isCalendarLocked = true
+                
                 checkAndCreateTodayEntry()
                 
                 // Also make sure patternManager is synced with latest UserDefaults
@@ -846,6 +915,7 @@ struct ContentView: View {
                 if newPhase == .active {
                     // App has become active again
                     isEraserModeActive = false // Reset eraser mode when app becomes active
+                    isCalendarLocked = true // Ensure calendar is locked when app becomes active
                     
                     print("ContentView: App became active - refreshing data")
                     // Reset selected date to today in case date changed while app was inactive
@@ -864,6 +934,7 @@ struct ContentView: View {
                 } else if newPhase == .background {
                     // App has moved to background
                     isEraserModeActive = false // Also reset when app goes to background
+                    isCalendarLocked = true // Ensure calendar is locked when app goes to background
                     
                     // Rest of your existing code...
                 }
